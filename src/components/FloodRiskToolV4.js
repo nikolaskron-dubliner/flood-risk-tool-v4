@@ -1,14 +1,15 @@
 import { useState, useCallback } from "react";
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const SMARTY_AUTH_ID = (import.meta.env.VITE_SMARTY_AUTH_ID || "").trim();
-const SMARTY_AUTH_TOKEN = (import.meta.env.VITE_SMARTY_AUTH_TOKEN || "").trim();
-const FLOOD_REPORT_API_URL = (import.meta.env.VITE_FLOOD_REPORT_API_URL || "/api/flood-risk-report").trim();
-const HUBSPOT_CONTACT_API_URL = (import.meta.env.VITE_HUBSPOT_CONTACT_API_URL || "/api/hubspot-contact").trim();
+const FLOOD_REPORT_API_URL = "/api/flood-risk-report";
+const HUBSPOT_API_URL = "/api/hubspot-contact";
+const SMARTY_AUTH_ID = process.env.REACT_APP_SMARTY_AUTH_ID || "";
+const SMARTY_AUTH_TOKEN = process.env.REACT_APP_SMARTY_AUTH_TOKEN || "";
 
 // ─── SEASONAL URGENCY ────────────────────────────────────────────────────────
 function getSeasonalAlert() {
   const now = new Date();
+  const month = now.getMonth(); // 0-indexed
   const year = now.getFullYear();
   const events = [
     { name: "Atlantic Hurricane Season",  start: new Date(year, 5, 1),  color: "#c0392b", icon: "🌀" },
@@ -371,111 +372,51 @@ const FORM_STEPS = ["Your Details","Property Info","Property Condition"];
 
 // ─── ADDRESS VALIDATION ───────────────────────────────────────────────────────
 async function validateAddress(street, city, state, zip) {
-  const fallback = {
-    valid: true,
-    standardized: `${street}, ${city}, ${state} ${zip}`.replace(/\s+,/g, ",").trim(),
-    zip5: zip,
-  };
-
-  if (!SMARTY_AUTH_ID || !SMARTY_AUTH_TOKEN) {
-    return fallback;
-  }
-
   try {
-    const q = new URLSearchParams({
-      street,
-      city,
-      state,
-      zipcode: zip,
-      "auth-id": SMARTY_AUTH_ID,
-      "auth-token": SMARTY_AUTH_TOKEN,
-    });
+    const q = new URLSearchParams({ street, city, state, zipcode: zip, "auth-id": SMARTY_AUTH_ID, "auth-token": SMARTY_AUTH_TOKEN });
     const res = await fetch(`https://us-street.api.smartystreets.com/street-address?${q}`);
-    if (!res.ok) throw new Error(`Smarty street lookup failed: ${res.status}`);
-
     const data = await res.json();
     if (Array.isArray(data) && data.length > 0) {
-      const c = data[0].components;
-      const md = data[0].metadata || {};
-      return {
-        valid: true,
-        standardized: `${data[0].delivery_line_1}, ${data[0].last_line}`,
-        zip5: c.zipcode,
-        city: c.city_name,
-        state: c.state_abbreviation,
-        lat: md.latitude,
-        lng: md.longitude,
-      };
+      const c = data[0].components, md = data[0].metadata;
+      return { valid: true, standardized: data[0].delivery_line_1 + ", " + data[0].last_line, zip5: c.zipcode, city: c.city_name, state: c.state_abbreviation, lat: md.latitude, lng: md.longitude };
     }
     return { valid: false };
-  } catch (err) {
-    console.error("Address validation failed:", err);
-    return fallback;
-  }
+  } catch { return { valid: true, standardized: `${street}, ${city}, ${state} ${zip}`, zip5: zip }; }
 }
 
 async function validateByZip(zip) {
-  if (!SMARTY_AUTH_ID || !SMARTY_AUTH_TOKEN) {
-    return { valid: true, city: "your area", state: "" };
-  }
-
   try {
     const q = new URLSearchParams({ zipcode: zip, "auth-id": SMARTY_AUTH_ID, "auth-token": SMARTY_AUTH_TOKEN });
     const res = await fetch(`https://us-zipcode.api.smartystreets.com/lookup?${q}`);
-    if (!res.ok) throw new Error(`Smarty ZIP lookup failed: ${res.status}`);
-
     const data = await res.json();
-    if (Array.isArray(data) && data[0]?.cities?.length) {
-      return { valid: true, city: data[0].cities[0].city, state: data[0].cities[0].state_abbreviation };
-    }
+    if (Array.isArray(data) && data[0]?.cities?.length) return { valid: true, city: data[0].cities[0].city, state: data[0].cities[0].state_abbreviation };
     return { valid: false };
-  } catch (err) {
-    console.error("ZIP validation failed:", err);
-    return { valid: true, city: "your area", state: "" };
-  }
+  } catch { return { valid: true, city: "your area", state: "" }; }
 }
 
 // ─── HUBSPOT ─────────────────────────────────────────────────────────────────
 async function upsertHubSpot(fields) {
   try {
-    const res = await fetch(HUBSPOT_CONTACT_API_URL, {
+    await fetch("HUBSPOT_API_URL", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", },
       body: JSON.stringify({ properties: {
-        firstname: fields.firstName,
-        lastname: fields.lastName,
-        email: fields.email,
-        phone: fields.phone || "",
-        address: fields.address || "",
-        zip: fields.zip || "",
-        flood_risk_score: String(fields.score || ""),
-        flood_risk_tier: fields.tier || "",
-        property_type: fields.propertyType || "",
-        year_built: fields.yearBuilt || "",
-        has_basement: fields.basement || "",
-        flood_interest: fields.interest || "",
+        firstname: fields.firstName, lastname: fields.lastName, email: fields.email,
+        phone: fields.phone || "", address: fields.address || "", zip: fields.zip || "",
+        flood_risk_score: String(fields.score || ""), flood_risk_tier: fields.tier || "",
+        property_type: fields.propertyType || "", year_built: fields.yearBuilt || "",
+        has_basement: fields.basement || "", flood_interest: fields.interest || "",
         trees_overhanging: fields.treesOverhanging || "",
         prior_flood_damage: fields.priorFloodDamage || "",
         drainage_issues: fields.drainageIssues || "",
-      }}),
+      }}
     });
-
-    if (!res.ok) {
-      throw new Error(`HubSpot contact request failed: ${res.status}`);
-    }
-  } catch (err) {
-    console.error("Failed to send contact to backend:", err);
-  }
+  } catch {}
 }
 
 // ─── STORAGE ──────────────────────────────────────────────────────────────────
 async function saveToDb(rec) {
-  try {
-    const key = `submission:${Date.now()}`;
-    localStorage.setItem(key, JSON.stringify({ ...rec, savedAt: new Date().toISOString() }));
-  } catch (err) {
-    console.error("Failed to save submission locally:", err);
-  }
+  try { await window.storage.set(`submission:${Date.now()}`, JSON.stringify({ ...rec, savedAt: new Date().toISOString() })); } catch {}
 }
 
 // ─── AI PROMPT ────────────────────────────────────────────────────────────────
@@ -526,98 +467,6 @@ Return ONLY this JSON:
 }
 
 Generate 4-5 pro services relevant to this property. Make savings and financials realistic for ZIP ${f.zip}.`;
-}
-
-
-function buildFallbackReport(form, locationLabel, city, state) {
-  const hasBasement = form.basement && form.basement !== "No basement";
-  return {
-    score: 62,
-    tier: "High",
-    locationLabel: city ? `${city}, ${state}` : "your area",
-    location: locationLabel,
-    bullets: {
-      geographic: "This ZIP code sits within a documented watershed corridor with limited upstream retention.",
-      historical: "The region has experienced multiple federally declared flood events over the past three decades.",
-      climate: "Rainfall intensity is projected to increase 18% over the next 30 years under current climate models.",
-    },
-    financial: {
-      annualRisk: "$5,200–$18,000",
-      fiveYearNoAction: "$26,000–$90,000",
-      propertyValueImpact: "-5% to -10%",
-      insurancePremiumRange: "$2,600–$6,200/yr",
-      narrative: `Without protective measures, flood damage to your ${hasBasement ? "foundation, basement," : "foundation,"} HVAC systems, and interior finishes can accumulate rapidly. Lenders and insurers are increasingly scrutinising flood exposure — delayed action could mean higher premiums, reduced appraisal value, and difficulty refinancing or selling.`,
-    },
-    diyCategories: ["diversion", "entry", "removal", "infrastructure", "barriers"],
-    catSavings: { diversion: 4800, entry: 3200, removal: 6100, infrastructure: 7000, barriers: 2600 },
-    proServices: [
-      { icon: "🔧", name: "French Drain System", desc: "Perimeter drainage installed by a licensed contractor to intercept and redirect groundwater.", cost: "$3,000–$9,000", impact: "Very High", time: "2–3 days" },
-      { icon: "🏗️", name: "Foundation Waterproofing", desc: "Exterior waterproof membrane applied to foundation walls by a certified contractor.", cost: "$6,000–$18,000", impact: "Very High", time: "3–5 days" },
-      { icon: "📐", name: "Elevation Certificate", desc: "A licensed surveyor documents your exact elevation — required for insurance and FEMA compliance.", cost: "$600–$1,800", impact: "High", time: "1 day" },
-      { icon: "🔍", name: "Professional Risk Assessment", desc: "A certified flood consultant delivers a tailored mitigation roadmap and cost-benefit analysis.", cost: "$500–$1,500", impact: "High", time: "Half day" },
-      ...(form.treesOverhanging === "Yes" ? [{ icon: "🌳", name: "Gutter Guard & Drainage System Install", desc: "Professional installation of leaf guards and extended downspouts to prevent blockage-driven overflow.", cost: "$800–$2,400", impact: "High", time: "1 day" }] : []),
-    ],
-  };
-}
-
-function normaliseFloodReport(raw, form, locationLabel, city, state) {
-  let parsed = raw;
-
-  if (parsed && typeof parsed.report === "string") {
-    try {
-      parsed = JSON.parse(parsed.report);
-    } catch {
-      parsed = { narrativeReport: parsed.report };
-    }
-  }
-
-  const fallback = buildFallbackReport(form, locationLabel, city, state);
-  const bullets = {
-    geographic: parsed?.bullets?.geographic || fallback.bullets.geographic,
-    historical: parsed?.bullets?.historical || fallback.bullets.historical,
-    climate: parsed?.bullets?.climate || fallback.bullets.climate,
-  };
-
-  const financial = {
-    annualRisk: parsed?.financial?.annualRisk || fallback.financial.annualRisk,
-    fiveYearNoAction: parsed?.financial?.fiveYearNoAction || fallback.financial.fiveYearNoAction,
-    propertyValueImpact: parsed?.financial?.propertyValueImpact || fallback.financial.propertyValueImpact,
-    insurancePremiumRange: parsed?.financial?.insurancePremiumRange || fallback.financial.insurancePremiumRange,
-    narrative: parsed?.financial?.narrative || parsed?.narrativeReport || fallback.financial.narrative,
-  };
-
-  return {
-    ...fallback,
-    ...(parsed && typeof parsed === "object" ? parsed : {}),
-    location: locationLabel,
-    locationLabel: parsed?.locationLabel || fallback.locationLabel,
-    score: Number.isFinite(Number(parsed?.score)) ? Number(parsed.score) : fallback.score,
-    tier: parsed?.tier || fallback.tier,
-    bullets,
-    financial,
-    diyCategories: Array.isArray(parsed?.diyCategories) && parsed.diyCategories.length ? parsed.diyCategories : fallback.diyCategories,
-    catSavings: parsed?.catSavings && typeof parsed.catSavings === "object" ? { ...fallback.catSavings, ...parsed.catSavings } : fallback.catSavings,
-    proServices: Array.isArray(parsed?.proServices) && parsed.proServices.length ? parsed.proServices : fallback.proServices,
-  };
-}
-
-async function requestFloodReport(form, location) {
-  const res = await fetch(FLOOD_REPORT_API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ form, location, prompt: buildPrompt(form, location) }),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Flood report request failed: ${res.status}`);
-  }
-
-  const data = await res.json();
-  if (!data || typeof data !== "object") {
-    throw new Error("Flood report API returned invalid JSON.");
-  }
-
-  return data;
 }
 
 // ─── CALCULATOR COMPONENT ────────────────────────────────────────────────────
@@ -749,15 +598,10 @@ export default function FloodRiskApp() {
     if (step === 1) {
       if (addrMode === "full") {
         if (!form.addressLine.trim()) e.addressLine = "Required";
-        if (!form.zip.trim()) e.zip = "Required";
+        if (!form.zip.trim())         e.zip = "Required";
       } else {
         if (!form.zip.trim() || form.zip.trim().length < 5) e.zip = "Valid 5-digit ZIP required";
       }
-    }
-    if (step === 2) {
-      if (!form.treesOverhanging) e.treesOverhanging = "Required";
-      if (!form.priorFloodDamage) e.priorFloodDamage = "Required";
-      if (!form.drainageIssues) e.drainageIssues = "Required";
     }
     setErrs(e);
     return Object.keys(e).length === 0;
@@ -782,13 +626,44 @@ export default function FloodRiskApp() {
       location = `${zipCity}, ${zipState} ${form.zip}`;
     }
 
-    const [aiRaw] = await Promise.all([
+    const [aiRes] = await Promise.all([
       (async () => {
         try {
-          return await requestFloodReport({ ...form }, location);
-        } catch (err) {
-          console.error("Flood report API failed, using fallback report:", err);
-          return buildFallbackReport(form, location, zipCity, zipState);
+          const res = await fetch("https://api.anthropic.com/v1/messages", {
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({
+              model:"claude-sonnet-4-20250514", max_tokens:1800,
+              messages:[{ role:"user", content: buildPrompt({...form}, location) }],
+            }),
+          });
+          const d = await res.json();
+          const txt = (d.content||[]).map(i=>i.text||"").join("");
+          return JSON.parse(txt.replace(/```json|```/g,"").trim());
+        } catch {
+          const hasBasement = form.basement && form.basement !== "No basement";
+          return {
+            score:62, tier:"High", locationLabel: zipCity ? `${zipCity}, ${zipState}` : "your area",
+            bullets:{
+              geographic:"This ZIP code sits within a documented watershed corridor with limited upstream retention.",
+              historical:"The region has experienced multiple federally declared flood events over the past three decades.",
+              climate:"Rainfall intensity is projected to increase 18% over the next 30 years under current climate models.",
+            },
+            financial:{
+              annualRisk:"$5,200–$18,000", fiveYearNoAction:"$26,000–$90,000",
+              propertyValueImpact:"-5% to -10%", insurancePremiumRange:"$2,600–$6,200/yr",
+              narrative:`Without protective measures, flood damage to your ${hasBasement?"foundation, basement,":"foundation,"} HVAC systems, and interior finishes can accumulate rapidly. Lenders and insurers are increasingly scrutinising flood exposure — delayed action could mean higher premiums, reduced appraisal value, and difficulty refinancing or selling.`,
+            },
+            diyCategories:["diversion","entry","removal","infrastructure","barriers"],
+            catSavings:{ diversion:4800, entry:3200, removal:6100, infrastructure:7000, barriers:2600 },
+            proServices:[
+              { icon:"🔧", name:"French Drain System", desc:"Perimeter drainage installed by a licensed contractor to intercept and redirect groundwater.", cost:"$3,000–$9,000", impact:"Very High", time:"2–3 days" },
+              { icon:"🏗️", name:"Foundation Waterproofing", desc:"Exterior waterproof membrane applied to foundation walls by a certified contractor.", cost:"$6,000–$18,000", impact:"Very High", time:"3–5 days" },
+              { icon:"📐", name:"Elevation Certificate", desc:"A licensed surveyor documents your exact elevation — required for insurance and FEMA compliance.", cost:"$600–$1,800", impact:"High", time:"1 day" },
+              { icon:"🔍", name:"Professional Risk Assessment", desc:"A certified flood consultant delivers a tailored mitigation roadmap and cost-benefit analysis.", cost:"$500–$1,500", impact:"High", time:"Half day" },
+              ...(form.treesOverhanging==="Yes" ? [{ icon:"🌳", name:"Gutter Guard & Drainage System Install", desc:"Professional installation of leaf guards and extended downspouts to prevent blockage-driven overflow.", cost:"$800–$2,400", impact:"High", time:"1 day" }] : []),
+            ],
+          };
         }
       })(),
       (async () => {
@@ -800,9 +675,26 @@ export default function FloodRiskApp() {
       })(),
     ]);
 
-    const aiRes = normaliseFloodReport(aiRaw, form, location, zipCity, zipState);
     setResult({ ...aiRes, location, zip: form.zip });
     await saveToDb({ firstName:form.firstName, lastName:form.lastName, email:form.email, address:location, zip:form.zip, yearBuilt:form.yearBuilt, propertyType:form.propertyType, basement:form.basement, treesOverhanging:form.treesOverhanging, priorFloodDamage:form.priorFloodDamage, drainageIssues:form.drainageIssues, score:aiRes.score, tier:aiRes.tier });
+    await upsertHubSpot({
+      firstName: form.firstName,
+      lastName: form.lastName,
+      email: form.email,
+      address: location,
+      zip: form.zip,
+      score: aiRes.score,
+      tier: aiRes.tier,
+      propertyType: form.propertyType,
+      yearBuilt: form.yearBuilt,
+      basement: form.basement,
+      treesOverhanging: form.treesOverhanging,
+      priorFloodDamage: form.priorFloodDamage,
+      drainageIssues: form.drainageIssues,
+      followUpRequested: false,
+      reportSummary: aiRes?.financial?.narrative || "",
+      locationLabel: aiRes?.locationLabel || `${zipCity || ""}${zipCity && zipState ? ", " : ""}${zipState || ""}`.trim(),
+    });
     setPhase("result");
     setTimeout(() => setBarW(aiRes.score), 150);
   };
@@ -810,7 +702,26 @@ export default function FloodRiskApp() {
   const handleLeadSubmit = async () => {
     if (!lead.name || !lead.phone) return;
     const parts = lead.name.trim().split(" ");
-    await upsertHubSpot({ firstName:parts[0]||form.firstName, lastName:parts[1]||form.lastName, email:form.email, phone:lead.phone, address:result?.location||"", zip:form.zip, score:result?.score, tier:result?.tier, propertyType:form.propertyType, yearBuilt:form.yearBuilt, basement:form.basement, treesOverhanging:form.treesOverhanging, priorFloodDamage:form.priorFloodDamage, drainageIssues:form.drainageIssues, interest:lead.interest });
+    await upsertHubSpot({
+      firstName: parts[0] || form.firstName,
+      lastName: parts.slice(1).join(" ") || form.lastName,
+      email: form.email,
+      phone: lead.phone,
+      address: result?.location || "",
+      zip: form.zip,
+      score: result?.score,
+      tier: result?.tier,
+      propertyType: form.propertyType,
+      yearBuilt: form.yearBuilt,
+      basement: form.basement,
+      treesOverhanging: form.treesOverhanging,
+      priorFloodDamage: form.priorFloodDamage,
+      drainageIssues: form.drainageIssues,
+      interest: lead.interest,
+      followUpRequested: true,
+      reportSummary: result?.financial?.narrative || "",
+      locationLabel: result?.locationLabel || "",
+    });
     setLeadDone(true);
   };
 
@@ -995,17 +906,14 @@ export default function FloodRiskApp() {
                       <label>Do trees overhang your roof or gutters?</label>
                       <RadioGroup field="treesOverhanging" options={["Yes","No","Not sure"]}/>
                       {form.treesOverhanging === "Yes" && <div style={{fontSize:12,color:"var(--teal)",marginTop:4,fontWeight:600}}>🌳 Noted — blocked gutters are a leading cause of preventable water damage</div>}
-                      {errs.treesOverhanging && <div className="err">{errs.treesOverhanging}</div>}
                     </div>
                     <div className="fld">
                       <label>Has the property had flood or water damage before?</label>
                       <RadioGroup field="priorFloodDamage" options={["Yes","No","Not sure"]}/>
-                      {errs.priorFloodDamage && <div className="err">{errs.priorFloodDamage}</div>}
                     </div>
                     <div className="fld">
                       <label>Do you notice water pooling or drainage issues near the property?</label>
                       <RadioGroup field="drainageIssues" options={["Yes","No","Sometimes"]}/>
-                      {errs.drainageIssues && <div className="err">{errs.drainageIssues}</div>}
                     </div>
                     <div style={{display:"flex",gap:10}}>
                       <button className="btn-go" style={{background:"var(--cloud)",color:"var(--sub)",border:"1.5px solid var(--border)",boxShadow:"none",flex:"0 0 auto",width:"auto",padding:"12px 20px"}} onClick={prevStep}>← Back</button>
@@ -1072,9 +980,9 @@ export default function FloodRiskApp() {
 
                 <div className="sh-body">
                   <div className="rlist">
-                    <div className="ri"><div className="ric geo">🗺️</div><div className="rt"><strong>Geographic:</strong> {result?.bullets?.geographic || "No geographic summary available."}</div></div>
-                    <div className="ri"><div className="ric hist">📋</div><div className="rt"><strong>Historical:</strong> {result?.bullets?.historical || "No historical summary available."}</div></div>
-                    <div className="ri"><div className="ric clim">🌡️</div><div className="rt"><strong>Climate Trend:</strong> {result?.bullets?.climate || "No climate summary available."}</div></div>
+                    <div className="ri"><div className="ric geo">🗺️</div><div className="rt"><strong>Geographic:</strong> {result.bullets.geographic}</div></div>
+                    <div className="ri"><div className="ric hist">📋</div><div className="rt"><strong>Historical:</strong> {result.bullets.historical}</div></div>
+                    <div className="ri"><div className="ric clim">🌡️</div><div className="rt"><strong>Climate Trend:</strong> {result.bullets.climate}</div></div>
                     {form.treesOverhanging === "Yes" && <div className="ri"><div className="ric" style={{background:"#f0fae8"}}>🌳</div><div className="rt"><strong>Gutter Risk:</strong> Overhanging trees increase debris blockage risk — a common trigger for preventable water intrusion at roof level and along foundations.</div></div>}
                     {form.priorFloodDamage === "Yes" && <div className="ri"><div className="ric" style={{background:"#fff0f0"}}>⚠️</div><div className="rt"><strong>Prior Damage:</strong> Properties with a history of flood damage face statistically higher repeat event risk and may face insurance loading.</div></div>}
                     {(form.drainageIssues === "Yes" || form.drainageIssues === "Sometimes") && <div className="ri"><div className="ric" style={{background:"#fff8e0"}}>💧</div><div className="rt"><strong>Drainage:</strong> Existing pooling or drainage issues indicate the current landscape is not directing water away effectively — a key risk multiplier.</div></div>}
@@ -1087,12 +995,12 @@ export default function FloodRiskApp() {
                 <div className="sec-hd"><span className="sec-ico">💰</span><span className="sec-title">Financial Impact — If You Don't Act</span></div>
                 <div className="sec-body">
                   <div className="fin-grid">
-                    <div className="fbox fb-r"><div className="flbl">Est. Annual Loss Exposure</div><div className="famt">{result?.financial?.annualRisk || "N/A"}</div><div className="fnote">Repairs, cleanup & contents</div></div>
-                    <div className="fbox fb-o"><div className="flbl">5-Year Cost (No Action)</div><div className="famt">{result?.financial?.fiveYearNoAction || "N/A"}</div><div className="fnote">Cumulative projected exposure</div></div>
-                    <div className="fbox fb-b"><div className="flbl">Flood Insurance Range</div><div className="famt">{result?.financial?.insurancePremiumRange || "N/A"}</div><div className="fnote">Estimated annual premium</div></div>
-                    <div className="fbox fb-g"><div className="flbl">Property Value Impact</div><div className="famt">{result?.financial?.propertyValueImpact || "N/A"}</div><div className="fnote">vs. low-risk comparables</div></div>
+                    <div className="fbox fb-r"><div className="flbl">Est. Annual Loss Exposure</div><div className="famt">{result.financial.annualRisk}</div><div className="fnote">Repairs, cleanup & contents</div></div>
+                    <div className="fbox fb-o"><div className="flbl">5-Year Cost (No Action)</div><div className="famt">{result.financial.fiveYearNoAction}</div><div className="fnote">Cumulative projected exposure</div></div>
+                    <div className="fbox fb-b"><div className="flbl">Flood Insurance Range</div><div className="famt">{result.financial.insurancePremiumRange}</div><div className="fnote">Estimated annual premium</div></div>
+                    <div className="fbox fb-g"><div className="flbl">Property Value Impact</div><div className="famt">{result.financial.propertyValueImpact}</div><div className="fnote">vs. low-risk comparables</div></div>
                   </div>
-                  <div className="fnarr">{result?.financial?.narrative || "No financial narrative available."}</div>
+                  <div className="fnarr">{result.financial.narrative}</div>
                 </div>
               </div>
 
