@@ -528,6 +528,79 @@ Return ONLY this JSON:
 Generate 4-5 pro services relevant to this property. Make savings and financials realistic for ZIP ${f.zip}.`;
 }
 
+
+function buildFallbackReport(form, locationLabel, city, state) {
+  const hasBasement = form.basement && form.basement !== "No basement";
+  return {
+    score: 62,
+    tier: "High",
+    locationLabel: city ? `${city}, ${state}` : "your area",
+    location: locationLabel,
+    bullets: {
+      geographic: "This ZIP code sits within a documented watershed corridor with limited upstream retention.",
+      historical: "The region has experienced multiple federally declared flood events over the past three decades.",
+      climate: "Rainfall intensity is projected to increase 18% over the next 30 years under current climate models.",
+    },
+    financial: {
+      annualRisk: "$5,200–$18,000",
+      fiveYearNoAction: "$26,000–$90,000",
+      propertyValueImpact: "-5% to -10%",
+      insurancePremiumRange: "$2,600–$6,200/yr",
+      narrative: `Without protective measures, flood damage to your ${hasBasement ? "foundation, basement," : "foundation,"} HVAC systems, and interior finishes can accumulate rapidly. Lenders and insurers are increasingly scrutinising flood exposure — delayed action could mean higher premiums, reduced appraisal value, and difficulty refinancing or selling.`,
+    },
+    diyCategories: ["diversion", "entry", "removal", "infrastructure", "barriers"],
+    catSavings: { diversion: 4800, entry: 3200, removal: 6100, infrastructure: 7000, barriers: 2600 },
+    proServices: [
+      { icon: "🔧", name: "French Drain System", desc: "Perimeter drainage installed by a licensed contractor to intercept and redirect groundwater.", cost: "$3,000–$9,000", impact: "Very High", time: "2–3 days" },
+      { icon: "🏗️", name: "Foundation Waterproofing", desc: "Exterior waterproof membrane applied to foundation walls by a certified contractor.", cost: "$6,000–$18,000", impact: "Very High", time: "3–5 days" },
+      { icon: "📐", name: "Elevation Certificate", desc: "A licensed surveyor documents your exact elevation — required for insurance and FEMA compliance.", cost: "$600–$1,800", impact: "High", time: "1 day" },
+      { icon: "🔍", name: "Professional Risk Assessment", desc: "A certified flood consultant delivers a tailored mitigation roadmap and cost-benefit analysis.", cost: "$500–$1,500", impact: "High", time: "Half day" },
+      ...(form.treesOverhanging === "Yes" ? [{ icon: "🌳", name: "Gutter Guard & Drainage System Install", desc: "Professional installation of leaf guards and extended downspouts to prevent blockage-driven overflow.", cost: "$800–$2,400", impact: "High", time: "1 day" }] : []),
+    ],
+  };
+}
+
+function normaliseFloodReport(raw, form, locationLabel, city, state) {
+  let parsed = raw;
+
+  if (parsed && typeof parsed.report === "string") {
+    try {
+      parsed = JSON.parse(parsed.report);
+    } catch {
+      parsed = { narrativeReport: parsed.report };
+    }
+  }
+
+  const fallback = buildFallbackReport(form, locationLabel, city, state);
+  const bullets = {
+    geographic: parsed?.bullets?.geographic || fallback.bullets.geographic,
+    historical: parsed?.bullets?.historical || fallback.bullets.historical,
+    climate: parsed?.bullets?.climate || fallback.bullets.climate,
+  };
+
+  const financial = {
+    annualRisk: parsed?.financial?.annualRisk || fallback.financial.annualRisk,
+    fiveYearNoAction: parsed?.financial?.fiveYearNoAction || fallback.financial.fiveYearNoAction,
+    propertyValueImpact: parsed?.financial?.propertyValueImpact || fallback.financial.propertyValueImpact,
+    insurancePremiumRange: parsed?.financial?.insurancePremiumRange || fallback.financial.insurancePremiumRange,
+    narrative: parsed?.financial?.narrative || parsed?.narrativeReport || fallback.financial.narrative,
+  };
+
+  return {
+    ...fallback,
+    ...(parsed && typeof parsed === "object" ? parsed : {}),
+    location: locationLabel,
+    locationLabel: parsed?.locationLabel || fallback.locationLabel,
+    score: Number.isFinite(Number(parsed?.score)) ? Number(parsed.score) : fallback.score,
+    tier: parsed?.tier || fallback.tier,
+    bullets,
+    financial,
+    diyCategories: Array.isArray(parsed?.diyCategories) && parsed.diyCategories.length ? parsed.diyCategories : fallback.diyCategories,
+    catSavings: parsed?.catSavings && typeof parsed.catSavings === "object" ? { ...fallback.catSavings, ...parsed.catSavings } : fallback.catSavings,
+    proServices: Array.isArray(parsed?.proServices) && parsed.proServices.length ? parsed.proServices : fallback.proServices,
+  };
+}
+
 async function requestFloodReport(form, location) {
   const res = await fetch(FLOOD_REPORT_API_URL, {
     method: "POST",
@@ -709,35 +782,13 @@ export default function FloodRiskApp() {
       location = `${zipCity}, ${zipState} ${form.zip}`;
     }
 
-    const [aiRes] = await Promise.all([
+    const [aiRaw] = await Promise.all([
       (async () => {
         try {
           return await requestFloodReport({ ...form }, location);
         } catch (err) {
           console.error("Flood report API failed, using fallback report:", err);
-          const hasBasement = form.basement && form.basement !== "No basement";
-          return {
-            score:62, tier:"High", locationLabel: zipCity ? `${zipCity}, ${zipState}` : "your area",
-            bullets:{
-              geographic:"This ZIP code sits within a documented watershed corridor with limited upstream retention.",
-              historical:"The region has experienced multiple federally declared flood events over the past three decades.",
-              climate:"Rainfall intensity is projected to increase 18% over the next 30 years under current climate models.",
-            },
-            financial:{
-              annualRisk:"$5,200–$18,000", fiveYearNoAction:"$26,000–$90,000",
-              propertyValueImpact:"-5% to -10%", insurancePremiumRange:"$2,600–$6,200/yr",
-              narrative:`Without protective measures, flood damage to your ${hasBasement?"foundation, basement,":"foundation,"} HVAC systems, and interior finishes can accumulate rapidly. Lenders and insurers are increasingly scrutinising flood exposure — delayed action could mean higher premiums, reduced appraisal value, and difficulty refinancing or selling.`,
-            },
-            diyCategories:["diversion","entry","removal","infrastructure","barriers"],
-            catSavings:{ diversion:4800, entry:3200, removal:6100, infrastructure:7000, barriers:2600 },
-            proServices:[
-              { icon:"🔧", name:"French Drain System", desc:"Perimeter drainage installed by a licensed contractor to intercept and redirect groundwater.", cost:"$3,000–$9,000", impact:"Very High", time:"2–3 days" },
-              { icon:"🏗️", name:"Foundation Waterproofing", desc:"Exterior waterproof membrane applied to foundation walls by a certified contractor.", cost:"$6,000–$18,000", impact:"Very High", time:"3–5 days" },
-              { icon:"📐", name:"Elevation Certificate", desc:"A licensed surveyor documents your exact elevation — required for insurance and FEMA compliance.", cost:"$600–$1,800", impact:"High", time:"1 day" },
-              { icon:"🔍", name:"Professional Risk Assessment", desc:"A certified flood consultant delivers a tailored mitigation roadmap and cost-benefit analysis.", cost:"$500–$1,500", impact:"High", time:"Half day" },
-              ...(form.treesOverhanging==="Yes" ? [{ icon:"🌳", name:"Gutter Guard & Drainage System Install", desc:"Professional installation of leaf guards and extended downspouts to prevent blockage-driven overflow.", cost:"$800–$2,400", impact:"High", time:"1 day" }] : []),
-            ],
-          };
+          return buildFallbackReport(form, location, zipCity, zipState);
         }
       })(),
       (async () => {
@@ -749,6 +800,7 @@ export default function FloodRiskApp() {
       })(),
     ]);
 
+    const aiRes = normaliseFloodReport(aiRaw, form, location, zipCity, zipState);
     setResult({ ...aiRes, location, zip: form.zip });
     await saveToDb({ firstName:form.firstName, lastName:form.lastName, email:form.email, address:location, zip:form.zip, yearBuilt:form.yearBuilt, propertyType:form.propertyType, basement:form.basement, treesOverhanging:form.treesOverhanging, priorFloodDamage:form.priorFloodDamage, drainageIssues:form.drainageIssues, score:aiRes.score, tier:aiRes.tier });
     setPhase("result");
@@ -1020,9 +1072,9 @@ export default function FloodRiskApp() {
 
                 <div className="sh-body">
                   <div className="rlist">
-                    <div className="ri"><div className="ric geo">🗺️</div><div className="rt"><strong>Geographic:</strong> {result.bullets.geographic}</div></div>
-                    <div className="ri"><div className="ric hist">📋</div><div className="rt"><strong>Historical:</strong> {result.bullets.historical}</div></div>
-                    <div className="ri"><div className="ric clim">🌡️</div><div className="rt"><strong>Climate Trend:</strong> {result.bullets.climate}</div></div>
+                    <div className="ri"><div className="ric geo">🗺️</div><div className="rt"><strong>Geographic:</strong> {result?.bullets?.geographic || "No geographic summary available."}</div></div>
+                    <div className="ri"><div className="ric hist">📋</div><div className="rt"><strong>Historical:</strong> {result?.bullets?.historical || "No historical summary available."}</div></div>
+                    <div className="ri"><div className="ric clim">🌡️</div><div className="rt"><strong>Climate Trend:</strong> {result?.bullets?.climate || "No climate summary available."}</div></div>
                     {form.treesOverhanging === "Yes" && <div className="ri"><div className="ric" style={{background:"#f0fae8"}}>🌳</div><div className="rt"><strong>Gutter Risk:</strong> Overhanging trees increase debris blockage risk — a common trigger for preventable water intrusion at roof level and along foundations.</div></div>}
                     {form.priorFloodDamage === "Yes" && <div className="ri"><div className="ric" style={{background:"#fff0f0"}}>⚠️</div><div className="rt"><strong>Prior Damage:</strong> Properties with a history of flood damage face statistically higher repeat event risk and may face insurance loading.</div></div>}
                     {(form.drainageIssues === "Yes" || form.drainageIssues === "Sometimes") && <div className="ri"><div className="ric" style={{background:"#fff8e0"}}>💧</div><div className="rt"><strong>Drainage:</strong> Existing pooling or drainage issues indicate the current landscape is not directing water away effectively — a key risk multiplier.</div></div>}
@@ -1035,12 +1087,12 @@ export default function FloodRiskApp() {
                 <div className="sec-hd"><span className="sec-ico">💰</span><span className="sec-title">Financial Impact — If You Don't Act</span></div>
                 <div className="sec-body">
                   <div className="fin-grid">
-                    <div className="fbox fb-r"><div className="flbl">Est. Annual Loss Exposure</div><div className="famt">{result.financial.annualRisk}</div><div className="fnote">Repairs, cleanup & contents</div></div>
-                    <div className="fbox fb-o"><div className="flbl">5-Year Cost (No Action)</div><div className="famt">{result.financial.fiveYearNoAction}</div><div className="fnote">Cumulative projected exposure</div></div>
-                    <div className="fbox fb-b"><div className="flbl">Flood Insurance Range</div><div className="famt">{result.financial.insurancePremiumRange}</div><div className="fnote">Estimated annual premium</div></div>
-                    <div className="fbox fb-g"><div className="flbl">Property Value Impact</div><div className="famt">{result.financial.propertyValueImpact}</div><div className="fnote">vs. low-risk comparables</div></div>
+                    <div className="fbox fb-r"><div className="flbl">Est. Annual Loss Exposure</div><div className="famt">{result?.financial?.annualRisk || "N/A"}</div><div className="fnote">Repairs, cleanup & contents</div></div>
+                    <div className="fbox fb-o"><div className="flbl">5-Year Cost (No Action)</div><div className="famt">{result?.financial?.fiveYearNoAction || "N/A"}</div><div className="fnote">Cumulative projected exposure</div></div>
+                    <div className="fbox fb-b"><div className="flbl">Flood Insurance Range</div><div className="famt">{result?.financial?.insurancePremiumRange || "N/A"}</div><div className="fnote">Estimated annual premium</div></div>
+                    <div className="fbox fb-g"><div className="flbl">Property Value Impact</div><div className="famt">{result?.financial?.propertyValueImpact || "N/A"}</div><div className="fnote">vs. low-risk comparables</div></div>
                   </div>
-                  <div className="fnarr">{result.financial.narrative}</div>
+                  <div className="fnarr">{result?.financial?.narrative || "No financial narrative available."}</div>
                 </div>
               </div>
 
