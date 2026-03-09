@@ -693,7 +693,7 @@ export default function FloodRiskApp() {
       location = `${zipCity}, ${zipState} ${form.zip}`;
     }
 
-    const [aiRes] = await Promise.all([
+        const [aiRes] = await Promise.all([
       (async () => {
         try {
           const res = await fetch(FLOOD_REPORT_API_URL, {
@@ -710,12 +710,46 @@ export default function FloodRiskApp() {
         }
       })(),
     ]);
-        }
-      })(),
-    ]);
 
     setResult({ ...aiRes, location, zip: form.zip });
-    await saveToDb({ firstName:form.firstName, lastName:form.lastName, email:form.email, address:location, zip:form.zip, yearBuilt:form.yearBuilt, propertyType:form.propertyType, basement:form.basement, treesOverhanging:form.treesOverhanging, priorFloodDamage:form.priorFloodDamage, drainageIssues:form.drainageIssues, score:aiRes.score, tier:aiRes.tier });
+    await saveToDb({
+      firstName: form.firstName,
+      lastName: form.lastName,
+      email: form.email,
+      address: location,
+      zip: form.zip,
+      yearBuilt: form.yearBuilt,
+      propertyType: form.propertyType,
+      basement: form.basement,
+      treesOverhanging: form.treesOverhanging,
+      priorFloodDamage: form.priorFloodDamage,
+      drainageIssues: form.drainageIssues,
+      score: aiRes.score,
+      tier: aiRes.tier
+    });
+
+    await upsertHubSpot({
+      firstName: form.firstName,
+      lastName: form.lastName,
+      email: form.email,
+      phone: form.phone || "",
+      address: form.addressLine || location,
+      zip: form.zip,
+      score: aiRes?.score,
+      tier: aiRes?.tier,
+      propertyType: form.propertyType,
+      yearBuilt: form.yearBuilt,
+      basement: form.basement,
+      interest: form.interest || "",
+      treesOverhanging: form.treesOverhanging,
+      priorFloodDamage: form.priorFloodDamage,
+      drainageIssues: form.drainageIssues,
+      followUpRequested: false,
+      followUpRequestedValue: "No",
+      reportSummary: aiRes?.financial?.narrative || "",
+      locationLabel: aiRes?.locationLabel || location
+    });
+
     setPhase("result");
     setTimeout(() => setBarW(aiRes.score), 150);
   };
