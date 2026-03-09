@@ -397,26 +397,49 @@ async function validateByZip(zip) {
 // ─── HUBSPOT ─────────────────────────────────────────────────────────────────
 async function upsertHubSpot(fields) {
   try {
-    await fetch("HUBSPOT_API_URL", {
+    const res = await fetch(HUBSPOT_API_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", },
-      body: JSON.stringify({ properties: {
-        firstname: fields.firstName, lastname: fields.lastName, email: fields.email,
-        phone: fields.phone || "", address: fields.address || "", zip: fields.zip || "",
-        flood_risk_score: String(fields.score || ""), flood_risk_tier: fields.tier || "",
-        property_type: fields.propertyType || "", year_built: fields.yearBuilt || "",
-        has_basement: fields.basement || "", flood_interest: fields.interest || "",
-        trees_overhanging: fields.treesOverhanging || "",
-        prior_flood_damage: fields.priorFloodDamage || "",
-        drainage_issues: fields.drainageIssues || "",
-      }}
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        firstName: fields.firstName || "",
+        lastName: fields.lastName || "",
+        email: fields.email || "",
+        phone: fields.phone || "",
+        address: fields.address || "",
+        zip: fields.zip || "",
+        score: fields.score ?? "",
+        tier: fields.tier || "",
+        propertyType: fields.propertyType || "",
+        yearBuilt: fields.yearBuilt || "",
+        basement: fields.basement || "",
+        interest: fields.interest || "",
+        treesOverhanging: fields.treesOverhanging || "",
+        priorFloodDamage: fields.priorFloodDamage || "",
+        drainageIssues: fields.drainageIssues || "",
+        followUpRequested: !!fields.followUpRequested,
+        followUpRequestedValue: fields.followUpRequestedValue || (fields.followUpRequested ? "Yes" : "No"),
+        reportSummary: fields.reportSummary || "",
+        locationLabel: fields.locationLabel || "",
+        floodAssessmentCompleted: "Yes"
+      })
     });
-  } catch {}
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.error("HubSpot upsert failed:", err);
+    }
+  } catch (err) {
+    console.error("HubSpot upsert error:", err);
+  }
 }
 
 // ─── STORAGE ──────────────────────────────────────────────────────────────────
 async function saveToDb(rec) {
-  try { await window.storage.set(`submission:${Date.now()}`, JSON.stringify({ ...rec, savedAt: new Date().toISOString() })); } catch {}
+  try {
+    localStorage.setItem(
+      `submission:${Date.now()}`,
+      JSON.stringify({ ...rec, savedAt: new Date().toISOString() })
+    );
+  } catch {}
 }
 
 // ─── AI PROMPT ────────────────────────────────────────────────────────────────
@@ -538,6 +561,45 @@ function CostCalculator({ score }) {
 }
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
+
+function normalizeAssessmentResult(raw, form, locationLabel) {
+  const data = raw && typeof raw === "object" ? raw : {};
+  const score = Number.isFinite(Number(data.score)) ? Math.max(0, Math.min(100, Math.round(Number(data.score)))) : 62;
+  const tier = data.tier || (score >= 85 ? "Severe" : score >= 65 ? "High" : score >= 40 ? "Moderate" : "Low");
+  const fallbackLocation = data.locationLabel || locationLabel || [form.city, form.state].filter(Boolean).join(", ") || form.zip || "your area";
+
+  return {
+    score,
+    tier,
+    locationLabel: fallbackLocation,
+    bullets: {
+      geographic: data?.bullets?.geographic || "Localized runoff, drainage overload, and stormwater concentration can create flood exposure even outside the highest mapped flood zones.",
+      historical: data?.bullets?.historical || "Past severe-rain and flood events in the broader region suggest repeat exposure risk should be taken seriously.",
+      climate: data?.bullets?.climate || "Rainfall intensity is increasing in many regions, which raises short-duration flooding and drainage stress over time."
+    },
+    financial: {
+      annualRisk: data?.financial?.annualRisk || "$4,000–$14,000",
+      fiveYearNoAction: data?.financial?.fiveYearNoAction || "$20,000–$70,000",
+      propertyValueImpact: data?.financial?.propertyValueImpact || "-3% to -8%",
+      insurancePremiumRange: data?.financial?.insurancePremiumRange || "$1,600–$4,800/yr",
+      narrative: data?.financial?.narrative || "Without mitigation, repeated water intrusion can damage structures, finishes, contents, and mechanical systems while also affecting insurability and resale perception."
+    },
+    diyCategories: Array.isArray(data.diyCategories) && data.diyCategories.length ? data.diyCategories : ["diversion", "entry", "removal", "infrastructure", "barriers"],
+    catSavings: data?.catSavings && typeof data.catSavings === "object" ? data.catSavings : {
+      diversion: 4200,
+      entry: 2800,
+      removal: 5300,
+      infrastructure: 6700,
+      barriers: 2400
+    },
+    proServices: Array.isArray(data.proServices) && data.proServices.length ? data.proServices : [
+      { icon: "🔧", name: "French Drain System", desc: "Redirects groundwater and surface water away from the foundation.", cost: "$3,000–$9,000", impact: "Very High", time: "2–3 days" },
+      { icon: "🏗️", name: "Foundation Waterproofing", desc: "Adds a dedicated waterproof barrier to reduce seepage risk.", cost: "$6,000–$18,000", impact: "Very High", time: "3–5 days" },
+      { icon: "🔍", name: "Professional Risk Assessment", desc: "Provides property-specific mitigation priorities and next steps.", cost: "$500–$1,500", impact: "High", time: "Half day" }
+    ]
+  };
+}
+
 export default function FloodRiskApp() {
   const alert = getSeasonalAlert();
 
@@ -592,16 +654,21 @@ export default function FloodRiskApp() {
     const e = {};
     if (step === 0) {
       if (!form.firstName.trim()) e.firstName = "Required";
-      if (!form.lastName.trim())  e.lastName  = "Required";
+      if (!form.lastName.trim()) e.lastName = "Required";
       if (!form.email.trim() || !/\S+@\S+\.\S+/.test(form.email)) e.email = "Valid email required";
     }
     if (step === 1) {
       if (addrMode === "full") {
         if (!form.addressLine.trim()) e.addressLine = "Required";
-        if (!form.zip.trim())         e.zip = "Required";
+        if (!form.zip.trim()) e.zip = "Required";
       } else {
         if (!form.zip.trim() || form.zip.trim().length < 5) e.zip = "Valid 5-digit ZIP required";
       }
+    }
+    if (step === 2) {
+      if (!form.treesOverhanging) e.treesOverhanging = "Required";
+      if (!form.priorFloodDamage) e.priorFloodDamage = "Required";
+      if (!form.drainageIssues) e.drainageIssues = "Required";
     }
     setErrs(e);
     return Object.keys(e).length === 0;
@@ -629,72 +696,26 @@ export default function FloodRiskApp() {
     const [aiRes] = await Promise.all([
       (async () => {
         try {
-          const res = await fetch("https://api.anthropic.com/v1/messages", {
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body: JSON.stringify({
-              model:"claude-sonnet-4-20250514", max_tokens:1800,
-              messages:[{ role:"user", content: buildPrompt({...form}, location) }],
-            }),
+          const res = await fetch(FLOOD_REPORT_API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ form: { ...form }, location })
           });
           const d = await res.json();
-          const txt = (d.content||[]).map(i=>i.text||"").join("");
-          return JSON.parse(txt.replace(/```json|```/g,"").trim());
-        } catch {
-          const hasBasement = form.basement && form.basement !== "No basement";
-          return {
-            score:62, tier:"High", locationLabel: zipCity ? `${zipCity}, ${zipState}` : "your area",
-            bullets:{
-              geographic:"This ZIP code sits within a documented watershed corridor with limited upstream retention.",
-              historical:"The region has experienced multiple federally declared flood events over the past three decades.",
-              climate:"Rainfall intensity is projected to increase 18% over the next 30 years under current climate models.",
-            },
-            financial:{
-              annualRisk:"$5,200–$18,000", fiveYearNoAction:"$26,000–$90,000",
-              propertyValueImpact:"-5% to -10%", insurancePremiumRange:"$2,600–$6,200/yr",
-              narrative:`Without protective measures, flood damage to your ${hasBasement?"foundation, basement,":"foundation,"} HVAC systems, and interior finishes can accumulate rapidly. Lenders and insurers are increasingly scrutinising flood exposure — delayed action could mean higher premiums, reduced appraisal value, and difficulty refinancing or selling.`,
-            },
-            diyCategories:["diversion","entry","removal","infrastructure","barriers"],
-            catSavings:{ diversion:4800, entry:3200, removal:6100, infrastructure:7000, barriers:2600 },
-            proServices:[
-              { icon:"🔧", name:"French Drain System", desc:"Perimeter drainage installed by a licensed contractor to intercept and redirect groundwater.", cost:"$3,000–$9,000", impact:"Very High", time:"2–3 days" },
-              { icon:"🏗️", name:"Foundation Waterproofing", desc:"Exterior waterproof membrane applied to foundation walls by a certified contractor.", cost:"$6,000–$18,000", impact:"Very High", time:"3–5 days" },
-              { icon:"📐", name:"Elevation Certificate", desc:"A licensed surveyor documents your exact elevation — required for insurance and FEMA compliance.", cost:"$600–$1,800", impact:"High", time:"1 day" },
-              { icon:"🔍", name:"Professional Risk Assessment", desc:"A certified flood consultant delivers a tailored mitigation roadmap and cost-benefit analysis.", cost:"$500–$1,500", impact:"High", time:"Half day" },
-              ...(form.treesOverhanging==="Yes" ? [{ icon:"🌳", name:"Gutter Guard & Drainage System Install", desc:"Professional installation of leaf guards and extended downspouts to prevent blockage-driven overflow.", cost:"$800–$2,400", impact:"High", time:"1 day" }] : []),
-            ],
-          };
+          if (!res.ok) throw new Error(d?.error || "Failed to generate report");
+          return normalizeAssessmentResult(d, form, location);
+        } catch (err) {
+          console.error("Flood report generation failed:", err);
+          return normalizeAssessmentResult(null, form, location);
         }
       })(),
-      (async () => {
-        for (let i=0; i<LOAD_STEPS.length; i++) {
-          setStepIdx(i);
-          await new Promise(r => setTimeout(r, 650+Math.random()*550));
-          setDoneSet(p=>[...p,i]);
+    ]);
         }
       })(),
     ]);
 
     setResult({ ...aiRes, location, zip: form.zip });
     await saveToDb({ firstName:form.firstName, lastName:form.lastName, email:form.email, address:location, zip:form.zip, yearBuilt:form.yearBuilt, propertyType:form.propertyType, basement:form.basement, treesOverhanging:form.treesOverhanging, priorFloodDamage:form.priorFloodDamage, drainageIssues:form.drainageIssues, score:aiRes.score, tier:aiRes.tier });
-    await upsertHubSpot({
-      firstName: form.firstName,
-      lastName: form.lastName,
-      email: form.email,
-      address: location,
-      zip: form.zip,
-      score: aiRes.score,
-      tier: aiRes.tier,
-      propertyType: form.propertyType,
-      yearBuilt: form.yearBuilt,
-      basement: form.basement,
-      treesOverhanging: form.treesOverhanging,
-      priorFloodDamage: form.priorFloodDamage,
-      drainageIssues: form.drainageIssues,
-      followUpRequested: false,
-      reportSummary: aiRes?.financial?.narrative || "",
-      locationLabel: aiRes?.locationLabel || `${zipCity || ""}${zipCity && zipState ? ", " : ""}${zipState || ""}`.trim(),
-    });
     setPhase("result");
     setTimeout(() => setBarW(aiRes.score), 150);
   };
@@ -702,26 +723,7 @@ export default function FloodRiskApp() {
   const handleLeadSubmit = async () => {
     if (!lead.name || !lead.phone) return;
     const parts = lead.name.trim().split(" ");
-    await upsertHubSpot({
-      firstName: parts[0] || form.firstName,
-      lastName: parts.slice(1).join(" ") || form.lastName,
-      email: form.email,
-      phone: lead.phone,
-      address: result?.location || "",
-      zip: form.zip,
-      score: result?.score,
-      tier: result?.tier,
-      propertyType: form.propertyType,
-      yearBuilt: form.yearBuilt,
-      basement: form.basement,
-      treesOverhanging: form.treesOverhanging,
-      priorFloodDamage: form.priorFloodDamage,
-      drainageIssues: form.drainageIssues,
-      interest: lead.interest,
-      followUpRequested: true,
-      reportSummary: result?.financial?.narrative || "",
-      locationLabel: result?.locationLabel || "",
-    });
+    await upsertHubSpot({ firstName:parts[0]||form.firstName, lastName:parts[1]||form.lastName, email:form.email, phone:lead.phone, address:result?.location||"", zip:form.zip, score:result?.score, tier:result?.tier, propertyType:form.propertyType, yearBuilt:form.yearBuilt, basement:form.basement, treesOverhanging:form.treesOverhanging, priorFloodDamage:form.priorFloodDamage, drainageIssues:form.drainageIssues, interest:lead.interest });
     setLeadDone(true);
   };
 
