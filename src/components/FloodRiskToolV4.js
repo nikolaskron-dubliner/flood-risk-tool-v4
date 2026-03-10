@@ -1,7 +1,8 @@
 import { useState, useCallback } from "react";
 
+const FLOOD_REPORT_API_URL = "/api/flood-report";
+
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const FLOOD_REPORT_API_URL = "/api/flood-risk-report";
 const HUBSPOT_API_URL = "/api/hubspot-contact";
 const SMARTY_AUTH_ID = process.env.REACT_APP_SMARTY_AUTH_ID || "";
 const SMARTY_AUTH_TOKEN = process.env.REACT_APP_SMARTY_AUTH_TOKEN || "";
@@ -9,7 +10,6 @@ const SMARTY_AUTH_TOKEN = process.env.REACT_APP_SMARTY_AUTH_TOKEN || "";
 // ─── SEASONAL URGENCY ────────────────────────────────────────────────────────
 function getSeasonalAlert() {
   const now = new Date();
-  const month = now.getMonth(); // 0-indexed
   const year = now.getFullYear();
   const events = [
     { name: "Atlantic Hurricane Season",  start: new Date(year, 5, 1),  color: "#c0392b", icon: "🌀" },
@@ -441,57 +441,6 @@ async function saveToDb(rec) {
     );
   } catch {}
 }
-
-// ─── AI PROMPT ────────────────────────────────────────────────────────────────
-function buildPrompt(f, location) {
-  const hasBasement = f.basement && f.basement !== "No basement";
-  const treesRisk   = f.treesOverhanging === "Yes" ? "Property has trees overhanging the roof — increased gutter blockage and debris risk." : "";
-  const priorFlood  = f.priorFloodDamage === "Yes" ? "Property has prior flood damage history." : "";
-  const drainIssues = f.drainageIssues   === "Yes" ? "Known drainage issues on or near the property." : "";
-
-  return `You are a Flood Risk Exposure Engine. Return ONLY valid JSON, no markdown.
-
-Location: ${location} | ZIP: ${f.zip}
-First Name: ${f.firstName} | Year Built: ${f.yearBuilt||"Unknown"} | Property Type: ${f.propertyType||"Unknown"}
-Basement: ${f.basement||"Unknown"} | Has Basement: ${hasBasement}
-Additional risk factors: ${[treesRisk,priorFlood,drainIssues].filter(Boolean).join(" ")||"None noted"}
-
-RULES: ${!hasBasement?"Do NOT include basement recommendations.":"Basement recommendations OK."}
-${f.treesOverhanging==="Yes"?"MUST include gutter/debris management in recommendations.":""}
-
-Return ONLY this JSON:
-{
-  "score": <int 0-100 realistic for zip>,
-  "tier": "<Low|Moderate|High|Severe>",
-  "locationLabel": "<City, State>",
-  "bullets": {
-    "geographic": "<1 sentence>",
-    "historical": "<1 sentence>",
-    "climate": "<1 sentence>"
-  },
-  "financial": {
-    "annualRisk": "<e.g. $4,200–$14,000>",
-    "fiveYearNoAction": "<e.g. $21,000–$70,000>",
-    "propertyValueImpact": "<e.g. -4% to -9%>",
-    "insurancePremiumRange": "<e.g. $2,000–$5,200/yr>",
-    "narrative": "<2-3 sentences on inaction consequences, personalised to this property>"
-  },
-  "diyCategories": ["diversion","entry","removal","infrastructure","barriers"],
-  "catSavings": {
-    "diversion": <int avg annual $ saved if implemented>,
-    "entry": <int>,
-    "removal": <int>,
-    "infrastructure": <int>,
-    "barriers": <int>
-  },
-  "proServices": [
-    { "icon":"<emoji>", "name":"<name>", "desc":"<1 sentence>", "cost":"<range>", "impact":"<High|Very High>", "time":"<duration>" }
-  ]
-}
-
-Generate 4-5 pro services relevant to this property. Make savings and financials realistic for ZIP ${f.zip}.`;
-}
-
 // ─── CALCULATOR COMPONENT ────────────────────────────────────────────────────
 function CostCalculator({ score }) {
   const base = score || 50;
