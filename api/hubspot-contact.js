@@ -39,39 +39,43 @@ export default async function handler(req, res) {
       typeof followUpRequestedValue === "string" && followUpRequestedValue.trim()
         ? followUpRequestedValue.trim()
         : followUpRequested
-          ? "Yes"
-          : "No";
+          ? "True"
+          : "False";
 
     const properties = {
       firstname: firstName,
       lastname: lastName,
       email,
       phone,
+
       flood_address: address,
       flood_property_zip: zip,
-      flood_risk_score: score !== "" && score !== null && score !== undefined ? String(score) : "",
+      flood_risk_score:
+        score !== "" && score !== null && score !== undefined ? String(score) : "",
       flood_risk_tier: tier,
       flood_follow_up_requested: followUpValue,
       flood_report_summary: reportSummary,
       flood_assessment_submitted_at: new Date().toISOString(),
 
-      // Optional extra assessment context if matching HubSpot properties exist
       flood_location_label: locationLabel,
-      flood_property_type: propertyType,
-      flood_year_built: yearBuilt !== "" && yearBuilt !== null && yearBuilt !== undefined ? String(yearBuilt) : "",
-      flood_basement: basement,
+      property_type: propertyType,
+      year_built:
+        yearBuilt !== "" && yearBuilt !== null && yearBuilt !== undefined
+          ? String(yearBuilt)
+          : "",
+      has_basement: basement,
       flood_interest: interest,
-      flood_trees_overhanging: treesOverhanging,
-      flood_prior_flood_damage: priorFloodDamage,
-      flood_drainage_issues: drainageIssues
+      trees_overhanging: treesOverhanging,
+      prior_flood_damage: priorFloodDamage,
+      drainage_issues: drainageIssues
     };
 
-    // Remove empty values so we do not overwrite existing HubSpot data with blanks
     const cleanedProperties = Object.fromEntries(
-      Object.entries(properties).filter(([, value]) => value !== "" && value !== null && value !== undefined)
+      Object.entries(properties).filter(
+        ([, value]) => value !== "" && value !== null && value !== undefined
+      )
     );
 
-    // Try update by email first
     let hsRes = await fetch(
       `https://api.hubapi.com/crm/v3/objects/contacts/${encodeURIComponent(email)}?idProperty=email`,
       {
@@ -84,7 +88,6 @@ export default async function handler(req, res) {
       }
     );
 
-    // If contact doesn't exist, create it
     if (hsRes.status === 404) {
       hsRes = await fetch("https://api.hubapi.com/crm/v3/objects/contacts", {
         method: "POST",
