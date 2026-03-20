@@ -1,9 +1,12 @@
+import { Resend } from "resend";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const PROPERTY_TYPES = [
   "Single Family Home",
@@ -97,18 +100,17 @@ async function sendToHubSpot(body) {
         basement_type: body.basementType,
         trees_overhang: body.treesOverhang,
         prior_flood_damage:
-  body.priorFloodDamage === "Yes"
-    ? "True"
-    : body.priorFloodDamage === "No"
-    ? "False"
-    : "Not sure",
-
-drainage_issues:
-  body.drainageIssues === "Yes"
-    ? "True"
-    : body.drainageIssues === "No"
-    ? "False"
-    : "Sometimes",
+          body.priorFloodDamage === "Yes"
+            ? "True"
+            : body.priorFloodDamage === "No"
+            ? "False"
+            : "Not sure",
+        drainage_issues:
+          body.drainageIssues === "Yes"
+            ? "True"
+            : body.drainageIssues === "No"
+            ? "False"
+            : "Sometimes",
         interest_area: body.interestArea.join("; "),
         risk_score: body.riskScore ? String(body.riskScore) : ""
       }
@@ -119,6 +121,35 @@ drainage_issues:
 
   if (!response.ok) {
     throw new Error(result.message || "HubSpot sync failed");
+  }
+
+  return result;
+}
+
+async function sendNotificationEmail(body) {
+  const result = await resend.emails.send({
+    from: process.env.RESEND_FROM_EMAIL,
+    to: process.env.NOTIFY_TO_EMAIL,
+    subject: `New Flood Risk Assessment: ${body.firstName} ${body.lastName}`,
+    html: `
+      <h2>New Risk Assessment Submission</h2>
+      <p><strong>Name:</strong> ${body.firstName} ${body.lastName}</p>
+      <p><strong>Email:</strong> ${body.email}</p>
+      <p><strong>Phone:</strong> ${body.phone}</p>
+      <p><strong>Address:</strong> ${body.streetAddress}, ${body.city}, ${body.state} ${body.zipCode}</p>
+      <p><strong>Year Built:</strong> ${body.yearBuilt}</p>
+      <p><strong>Property Type:</strong> ${body.propertyType}</p>
+      <p><strong>Basement:</strong> ${body.basementType}</p>
+      <p><strong>Trees Overhang:</strong> ${body.treesOverhang}</p>
+      <p><strong>Prior Flood Damage:</strong> ${body.priorFloodDamage}</p>
+      <p><strong>Drainage Issues:</strong> ${body.drainageIssues}</p>
+      <p><strong>Interest Areas:</strong> ${body.interestArea.join(", ")}</p>
+      <p><strong>Risk Score:</strong> ${body.riskScore ?? "N/A"}</p>
+    `
+  });
+
+  if (result.error) {
+    throw new Error(result.error.message || "Email send failed");
   }
 
   return result;
@@ -171,11 +202,13 @@ export default async function handler(req, res) {
     }
 
     const hubspotResult = await sendToHubSpot(body);
+    const emailResult = await sendNotificationEmail(body);
 
     return res.status(200).json({
-      message: "Saved to database and sent to HubSpot",
+      message: "Saved to database, sent to HubSpot, and emailed notification",
       id: data[0].id,
-      hubspotId: hubspotResult.id
+      hubspotId: hubspotResult.id,
+      emailId: emailResult.data?.id || null
     });
   } catch (err) {
     return res.status(400).json({ error: err.message });
