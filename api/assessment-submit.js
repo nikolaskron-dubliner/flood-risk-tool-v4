@@ -96,8 +96,19 @@ async function sendToHubSpot(body) {
         property_type: body.propertyType,
         basement_type: body.basementType,
         trees_overhang: body.treesOverhang,
-        prior_flood_damage: body.priorFloodDamage,
-        drainage_issues: body.drainageIssues,
+        prior_flood_damage:
+  body.priorFloodDamage === "Yes"
+    ? "True"
+    : body.priorFloodDamage === "No"
+    ? "False"
+    : "Not sure",
+
+drainage_issues:
+  body.drainageIssues === "Yes"
+    ? "True"
+    : body.drainageIssues === "No"
+    ? "False"
+    : "Sometimes",
         interest_area: body.interestArea.join("; "),
         risk_score: body.riskScore ? String(body.riskScore) : ""
       }
