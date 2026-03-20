@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 
-const FLOOD_REPORT_API_URL = "/api/flood-report";
+const FLOOD_REPORT_API_URL = "/api/flood-risk-report";
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const HUBSPOT_API_URL = "/api/hubspot-contact";
