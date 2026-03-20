@@ -79,43 +79,54 @@ function validate(body) {
 }
 
 async function sendToHubSpot(body) {
-  const response = await fetch("https://api.hubapi.com/crm/v3/objects/contacts", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.HUBSPOT_ACCESS_TOKEN}`
-    },
-    body: JSON.stringify({
-      properties: {
-        email: body.email.toLowerCase(),
-        firstname: body.firstName,
-        lastname: body.lastName,
-        phone: body.phone,
-        address: body.streetAddress,
-        city: body.city,
-        state: body.state,
-        zip: body.zipCode,
-        year_built: String(body.yearBuilt),
-        property_type: body.propertyType,
-        basement_type: body.basementType,
-        trees_overhang: body.treesOverhang,
-        prior_flood_damage:
-          body.priorFloodDamage === "Yes"
-            ? "True"
-            : body.priorFloodDamage === "No"
-            ? "False"
-            : "Not sure",
-        drainage_issues:
-          body.drainageIssues === "Yes"
-            ? "True"
-            : body.drainageIssues === "No"
-            ? "False"
-            : "Sometimes",
-        interest_area: body.interestArea.join("; "),
-        risk_score: body.riskScore ? String(body.riskScore) : ""
-      }
-    })
-  });
+  const properties = {
+    email: body.email.toLowerCase(),
+    firstname: body.firstName,
+    lastname: body.lastName,
+    phone: body.phone,
+    address: body.streetAddress,
+    city: body.city,
+    state: body.state,
+    zip: body.zipCode,
+    year_built: String(body.yearBuilt),
+    property_type: body.propertyType,
+    basement_type: body.basementType,
+    trees_overhang: body.treesOverhang,
+    prior_flood_damage:
+      body.priorFloodDamage === "Yes"
+        ? "True"
+        : body.priorFloodDamage === "No"
+        ? "False"
+        : "Not sure",
+    drainage_issues:
+      body.drainageIssues === "Yes"
+        ? "True"
+        : body.drainageIssues === "No"
+        ? "False"
+        : "Sometimes",
+    interest_area: body.interestArea.join("; "),
+    risk_score: body.riskScore ? String(body.riskScore) : ""
+  };
+
+  const response = await fetch(
+    "https://api.hubapi.com/crm/v3/objects/contacts/batch/upsert",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.HUBSPOT_ACCESS_TOKEN}`
+      },
+      body: JSON.stringify({
+        inputs: [
+          {
+            idProperty: "email",
+            id: body.email.toLowerCase(),
+            properties
+          }
+        ]
+      })
+    }
+  );
 
   const result = await response.json();
 
@@ -123,9 +134,8 @@ async function sendToHubSpot(body) {
     throw new Error(result.message || "HubSpot sync failed");
   }
 
-  return result;
+  return result.results?.[0] || result;
 }
-
 async function sendNotificationEmail(body) {
   const result = await resend.emails.send({
     from: process.env.RESEND_FROM_EMAIL,
