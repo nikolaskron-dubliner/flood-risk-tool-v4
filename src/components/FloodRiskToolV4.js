@@ -964,6 +964,7 @@ const [form, setForm] = useState({
 
                 {/* STEP 2 — Condition */}
                 {formStep === 2 && (
+                  <></>
                   <div className="fg">
                     <div style={{background:"var(--skylt)",borderRadius:8,padding:"12px 15px",fontSize:13,color:"var(--blue)",marginBottom:4,fontWeight:500}}>
                       💡 These details significantly personalise your report. Take 30 seconds — it's worth it.
@@ -993,7 +994,7 @@ const [form, setForm] = useState({
                   <div className="ti" key={t}><span className="tck">✓</span>{t}</div>
                 ))}
               </div>
-            </div>
+              <></>
           )}
 
           {/* ── LOADING ── */}
