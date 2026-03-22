@@ -517,7 +517,7 @@ const [form, setForm] = useState({
   yearBuilt: "",
   propertyType: "",
   basement: "",
-  treesOverhanging: "",
+  treesOverhang: "",
   priorFloodDamage: "",
   drainageIssues: "",
   interest: ""
@@ -547,7 +547,7 @@ const [form, setForm] = useState({
   // progress %
   const fields0 = [form.firstName, form.lastName, form.email].filter(Boolean).length;
   const fields1 = [form.zip, form.yearBuilt, form.propertyType, form.basement].filter(Boolean).length;
-  const fields2 = [form.treesOverhanging, form.priorFloodDamage, form.drainageIssues].filter(Boolean).length;
+  const fields2 = [form.treesOverhang, form.priorFloodDamage, form.drainageIssues].filter(Boolean).length;
   const totalFilled = fields0 + fields1 + fields2;
   const totalFields = 3 + 4 + 3;
   const progressPct = Math.round((totalFilled / totalFields) * 100);
@@ -578,7 +578,7 @@ const [form, setForm] = useState({
       }
     }
     if (step === 2) {
-      if (!form.treesOverhanging) e.treesOverhanging = "Required";
+      if (!form.treesOverhang) e.treesOverhang = "Required";
       if (!form.priorFloodDamage) e.priorFloodDamage = "Required";
       if (!form.drainageIssues) e.drainageIssues = "Required";
     }
@@ -656,7 +656,7 @@ const [form, setForm] = useState({
         : form.basement === "Yes — Partial / crawlspace"
         ? "Yes- Partial / crawlspace"
         : form.basement,
-    treesOverhang: form.treesOverhanging,
+    treesOverhang: form.treesOverhang,
     priorFloodDamage: form.priorFloodDamage,
     drainageIssues: form.drainageIssues,
     interestArea: form.interest ? [form.interest] : ["General Information"],
@@ -670,7 +670,7 @@ const [form, setForm] = useState({
       zip: form.zip || "",
       propertyType: form.propertyType,
       basement: form.basement,
-      treesOverhanging: form.treesOverhanging,
+      treesOverhang: form.treesOverhang,
       priorFloodDamage: form.priorFloodDamage,
       drainageIssues: form.drainageIssues,
       interest: form.interest || "",
@@ -740,7 +740,7 @@ const [form, setForm] = useState({
         : form.basement === "Yes — Partial / crawlspace"
         ? "Yes- Partial / crawlspace"
         : form.basement,
-    treesOverhang: form.treesOverhanging,
+    treesOverhang: form.treesOverhang,
     priorFloodDamage: form.priorFloodDamage,
     drainageIssues: form.drainageIssues,
     interestArea: lead.interest ? [lead.interest] : ["General Information"],
@@ -860,33 +860,51 @@ const [form, setForm] = useState({
               </div>
               <div className="card-body">
 
-                {/* STEP 0 — Identity */}
-                {formStep === 0 && (
-                  <div className="fg">
-                    <div className="frow">
-                      <div className="fld">
-                        <label>First Name <span className="req">*</span></label>
-                        <input placeholder="Jane" value={form.firstName} className={errs.firstName?"err-field":""} onChange={e=>set("firstName",e.target.value)}/>
-                        {errs.firstName && <div className="err">{errs.firstName}</div>}
-                      </div>
-                      <div className="fld">
-                        <label>Last Name <span className="req">*</span></label>
-<input placeholder="Smith" value={form.lastName} className={errs.lastName?"err-field":""} onChange={e=>set("lastName",e.target.value)}/>
-{errs.lastName && <div className="err">{errs.lastName}</div>}
-</div>
-</div>
+{/* STEP 0 — Identity */}
+{formStep === 0 && (
+  <div className="fg">
+    <div className="frow">
+      <div className="fld">
+        <label>First Name <span className="req">*</span></label>
+        <input
+          placeholder="Jane"
+          value={form.firstName}
+          className={errs.firstName ? "err-field" : ""}
+          onChange={e => set("firstName", e.target.value)}
+        />
+        {errs.firstName && <div className="err">{errs.firstName}</div>}
+      </div>
 
-<div className="fld">
-  <label>Email Address <span className="req">*</span></label>
-  <input
-    type="email"
-    placeholder="jane@example.com"
-    value={form.email}
-    className={errs.email?"err-field":""}
-    onChange={e=>set("email",e.target.value)}
-  />
-  {errs.email && <div className="err">{errs.email}</div>}
-</div>
+      <div className="fld">
+        <label>Last Name <span className="req">*</span></label>
+        <input
+          placeholder="Smith"
+          value={form.lastName}
+          className={errs.lastName ? "err-field" : ""}
+          onChange={e => set("lastName", e.target.value)}
+        />
+        {errs.lastName && <div className="err">{errs.lastName}</div>}
+      </div>
+    </div>
+
+    <div className="fld">
+      <label>Email Address <span className="req">*</span></label>
+      <input
+        type="email"
+        placeholder="jane@example.com"
+        value={form.email}
+        className={errs.email ? "err-field" : ""}
+        onChange={e => set("email", e.target.value)}
+      />
+      {errs.email && <div className="err">{errs.email}</div>}
+    </div>
+
+    <div style={{ display: "flex", gap: 10 }}>
+      <button className="btn-go" style={{ flex: 1 }} onClick={nextStep}>
+        Continue →
+      </button>
+    </div>
+  </div>
 )}
                 {/* STEP 1 — Property */}
                 {formStep === 1 && (
@@ -956,8 +974,8 @@ const [form, setForm] = useState({
                     </div>
                     <div className="fld">
                       <label>Do trees overhang your roof or gutters?</label>
-                      <RadioGroup field="treesOverhanging" options={["Yes","No","Not sure"]}/>
-                      {form.treesOverhanging === "Yes" && <div style={{fontSize:12,color:"var(--teal)",marginTop:4,fontWeight:600}}>🌳 Noted — blocked gutters are a leading cause of preventable water damage</div>}
+                      <RadioGroup field="treesOverhang" options={["Yes","No","Not sure"]}/>
+                      {form.treesOverhang === "Yes" && <div style={{fontSize:12,color:"var(--teal)",marginTop:4,fontWeight:600}}>🌳 Noted — blocked gutters are a leading cause of preventable water damage</div>}
                     </div>
                     <div className="fld">
                       <label>Has the property had flood or water damage before?</label>
@@ -973,15 +991,16 @@ const [form, setForm] = useState({
                     </div>
                   </div>
                 )}
-              </div>
-              <div className="trow">
-                {["USPS Verified","FEMA Data","NOAA Rainfall","50-yr History","100% Free"].map(t=>(
-                  <div className="ti" key={t}><span className="tck">✓</span>{t}</div>
-                ))}
+<div className="trow">
+  {["USPS Verified","FEMA Data","NOAA Rainfall","50-yr History","100% Free"].map(t => (
+    <div className="ti" key={t}>
+      <span className="tck">✓</span>{t}
+    </div>
+  ))}
+</div>
               </div>
             </div>
           )}
-
           {/* ── LOADING ── */}
           {phase === "loading" && (
             <div className="loading-wrap">
@@ -1035,7 +1054,7 @@ const [form, setForm] = useState({
                     <div className="ri"><div className="ric geo">🗺️</div><div className="rt"><strong>Geographic:</strong> {result.bullets.geographic}</div></div>
                     <div className="ri"><div className="ric hist">📋</div><div className="rt"><strong>Historical:</strong> {result.bullets.historical}</div></div>
                     <div className="ri"><div className="ric clim">🌡️</div><div className="rt"><strong>Climate Trend:</strong> {result.bullets.climate}</div></div>
-                    {form.treesOverhanging === "Yes" && <div className="ri"><div className="ric" style={{background:"#f0fae8"}}>🌳</div><div className="rt"><strong>Gutter Risk:</strong> Overhanging trees increase debris blockage risk — a common trigger for preventable water intrusion at roof level and along foundations.</div></div>}
+                    {form.treesOverhang === "Yes" && <div className="ri"><div className="ric" style={{background:"#f0fae8"}}>🌳</div><div className="rt"><strong>Gutter Risk:</strong> Overhanging trees increase debris blockage risk — a common trigger for preventable water intrusion at roof level and along foundations.</div></div>}
                     {form.priorFloodDamage === "Yes" && <div className="ri"><div className="ric" style={{background:"#fff0f0"}}>⚠️</div><div className="rt"><strong>Prior Damage:</strong> Properties with a history of flood damage face statistically higher repeat event risk and may face insurance loading.</div></div>}
                     {(form.drainageIssues === "Yes" || form.drainageIssues === "Sometimes") && <div className="ri"><div className="ric" style={{background:"#fff8e0"}}>💧</div><div className="rt"><strong>Drainage:</strong> Existing pooling or drainage issues indicate the current landscape is not directing water away effectively — a key risk multiplier.</div></div>}
                   </div>
@@ -1071,7 +1090,7 @@ const [form, setForm] = useState({
                   <p style={{fontSize:13,color:"var(--sub)",marginBottom:16,lineHeight:1.6}}>
                     Based on your property profile, here are the protection categories most relevant to your situation — each with estimated annual savings if implemented. Click any category to explore products and get started today.
                     {!hasBasement && <span style={{display:"block",marginTop:5,color:"var(--teal)",fontWeight:600}}>✓ Tailored for a property without a basement.</span>}
-                    {form.treesOverhanging==="Yes" && <span style={{display:"block",marginTop:5,color:"#7a5200",fontWeight:600}}>🌳 Gutter and debris management solutions included based on your tree canopy.</span>}
+                    {form.treesOverhang==="Yes" && <span style={{display:"block",marginTop:5,color:"#7a5200",fontWeight:600}}>🌳 Gutter and debris management solutions included based on your tree canopy.</span>}
                   </p>
                   <div className="cat-grid">
                     {activeCats.map(cat => {
@@ -1181,10 +1200,13 @@ const [form, setForm] = useState({
               <button className="btn-reset" onClick={reset}>← Analyse Another Property</button>
             </div>
           )}
+        {copied && (
+          <div className="copied-toast">
+            &#10003; Link copied to clipboard!
+          </div>
+        )}
         </div>
       </div>
-
-      {copied && <div className="copied-toast">✓ Link copied to clipboard!</div>}
     </>
   );
 }
