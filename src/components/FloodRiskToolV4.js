@@ -872,18 +872,24 @@ const [form, setForm] = useState({
                       </div>
                       <div className="fld">
                         <label>Last Name <span className="req">*</span></label>
-                        <input placeholder="Smith" value={form.lastName} className={errs.lastName?"err-field":""} onChange={e=>set("lastName",e.target.value)}/>
-                        {errs.lastName && <div className="err">{errs.lastName}</div>}
-                      </div>
-                    </div>
-                    <div className="fld">
-                      <label>Email Address <span className="req">*</span></label>
-                      <input type="email" placeholder="jane@example.com" value={form.email} className={errs.email?"err-field":""} onChange={e=>set("email",e.target.value)}/>
-                      {errs.email && <div className="err">{errs.email}</div>}
-                    </div>
-                    <button className="btn-go" onClick={nextStep}>Continue →</button>
-                  </div>
-                  <div className="fld">
+<input placeholder="Smith" value={form.lastName} className={errs.lastName?"err-field":""} onChange={e=>set("lastName",e.target.value)}/>
+{errs.lastName && <div className="err">{errs.lastName}</div>}
+</div>
+</div>
+
+<div className="fld">
+  <label>Email Address <span className="req">*</span></label>
+  <input
+    type="email"
+    placeholder="jane@example.com"
+    value={form.email}
+    className={errs.email?"err-field":""}
+    onChange={e=>set("email",e.target.value)}
+  />
+  {errs.email && <div className="err">{errs.email}</div>}
+</div>
+
+<div className="fld">
   <label>Phone Number <span className="req">*</span></label>
   <input
     placeholder="(555) 555-5555"
@@ -893,7 +899,8 @@ const [form, setForm] = useState({
   />
   {errs.phone && <div className="err">{errs.phone}</div>}
 </div>
-                )}
+
+<button className="btn-go" onClick={nextStep}>Continue →</button>                )}
 
                 {/* STEP 1 — Property */}
                 {formStep === 1 && (
