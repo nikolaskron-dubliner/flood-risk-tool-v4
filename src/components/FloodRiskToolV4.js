@@ -394,53 +394,6 @@ async function validateByZip(zip) {
   } catch { return { valid: true, city: "your area", state: "" }; }
 }
 
-// ─── HUBSPOT ─────────────────────────────────────────────────────────────────
-async function upsertHubSpot(fields) {
-  try {
-    const res = await fetch(HUBSPOT_API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        firstName: fields.firstName || "",
-        lastName: fields.lastName || "",
-        email: fields.email || "",
-        phone: fields.phone || "",
-        address: fields.address || "",
-        zip: fields.zip || "",
-        score: fields.score ?? "",
-        tier: fields.tier || "",
-        propertyType: fields.propertyType || "",
-        yearBuilt: fields.yearBuilt || "",
-        basement: fields.basement || "",
-        interest: fields.interest || "",
-        treesOverhanging: fields.treesOverhanging || "",
-        priorFloodDamage: fields.priorFloodDamage || "",
-        drainageIssues: fields.drainageIssues || "",
-        followUpRequested: !!fields.followUpRequested,
-        followUpRequestedValue: fields.followUpRequestedValue || (fields.followUpRequested ? "Yes" : "No"),
-        reportSummary: fields.reportSummary || "",
-        locationLabel: fields.locationLabel || "",
-        floodAssessmentCompleted: "Yes"
-      })
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      console.error("HubSpot upsert failed:", err);
-    }
-  } catch (err) {
-    console.error("HubSpot upsert error:", err);
-  }
-}
-
-// ─── STORAGE ──────────────────────────────────────────────────────────────────
-async function saveToDb(rec) {
-  try {
-    localStorage.setItem(
-      `submission:${Date.now()}`,
-      JSON.stringify({ ...rec, savedAt: new Date().toISOString() })
-    );
-  } catch {}
-}
 // ─── CALCULATOR COMPONENT ────────────────────────────────────────────────────
 function CostCalculator({ score }) {
   const base = score || 50;
