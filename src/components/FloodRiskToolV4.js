@@ -745,11 +745,54 @@ export default function FloodRiskApp() {
 };
 
   const handleLeadSubmit = async () => {
-    if (!lead.name || !lead.phone) return;
-    const parts = lead.name.trim().split(" ");
-    await upsertHubSpot({ firstName:parts[0]||form.firstName, lastName:parts[1]||form.lastName, email:form.email, phone:lead.phone, address:result?.location||"", zip:form.zip, score:result?.score, tier:result?.tier, propertyType:form.propertyType, yearBuilt:form.yearBuilt, basement:form.basement, treesOverhanging:form.treesOverhanging, priorFloodDamage:form.priorFloodDamage, drainageIssues:form.drainageIssues, interest:lead.interest });
-    setLeadDone(true);
+  if (!lead.name || !lead.phone) return;
+
+  const parts = lead.name.trim().split(" ");
+
+  const payload = {
+    firstName: parts[0] || form.firstName,
+    lastName: parts[1] || form.lastName,
+    email: form.email,
+    phone: lead.phone,
+    streetAddress: result?.location || "",
+    city: form.city || "",
+    state: form.state || "",
+    zipCode: form.zip,
+    yearBuilt: form.yearBuilt,
+    fullName: lead.name,
+    propertyType: form.propertyType,
+    basementType: form.basement,
+    treesOverhang: form.treesOverhanging,
+    priorFloodDamage: form.priorFloodDamage,
+    drainageIssues: form.drainageIssues,
+    interestArea: lead.interest ? [lead.interest] : ["General Information"],
+    riskScore: result?.score ?? null,
+    assessmentAnswers: {
+      source: "lead_followup"
+    }
   };
+
+  try {
+    const response = await fetch("/api/assessment-submit", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || "Lead submission failed");
+    }
+
+    setLeadDone(true);
+  } catch (err) {
+    console.error("Lead submit failed:", err);
+    alert(err.message || "Something went wrong.");
+  }
+};
 
   const handleShare = platform => {
     const score = result?.score || 0;
