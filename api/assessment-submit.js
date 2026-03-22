@@ -44,7 +44,7 @@ function validate(body) {
   if (!body.state) throw new Error("Missing state");
   if (!body.zipCode) throw new Error("Missing zipCode");
   if (!body.yearBuilt) throw new Error("Missing yearBuilt");
-  if (!body.phone) throw new Error("Missing phone");
+ if (body.requirePhone && !body.phone) throw new Error("Missing phone");
   if (!body.fullName) throw new Error("Missing fullName");
 
   if (!PROPERTY_TYPES.includes(body.propertyType)) {

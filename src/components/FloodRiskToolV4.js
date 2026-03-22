@@ -568,7 +568,6 @@ const [form, setForm] = useState({
   if (!form.firstName.trim()) e.firstName = "Required";
   if (!form.lastName.trim()) e.lastName = "Required";
   if (!form.email.trim() || !/\S+@\S+\.\S+/.test(form.email)) e.email = "Valid email required";
-  if (!form.phone.trim()) e.phone = "Required";
 }
     if (step === 1) {
       if (addrMode === "full") {
@@ -635,10 +634,10 @@ const [form, setForm] = useState({
   setResult({ ...aiRes, location, zip: form.zip });
 
   const payload = {
+    requirePhone: false,
     firstName: form.firstName,
     lastName: form.lastName,
     email: form.email,
-    phone: form.phone || "",
     streetAddress: form.addressLine || "",
     city: zipCity || form.city || "",
     state: zipState || form.state || "",
@@ -888,20 +887,7 @@ const [form, setForm] = useState({
   />
   {errs.email && <div className="err">{errs.email}</div>}
 </div>
-
-<div className="fld">
-  <label>Phone Number <span className="req">*</span></label>
-  <input
-    placeholder="(555) 555-5555"
-    value={form.phone}
-    className={errs.phone ? "err-field" : ""}
-    onChange={e => set("phone", e.target.value)}
-  />
-  {errs.phone && <div className="err">{errs.phone}</div>}
-</div>
-
-<button className="btn-go" onClick={nextStep}>Continue →</button>                )}
-
+)}
                 {/* STEP 1 — Property */}
                 {formStep === 1 && (
                   <div className="fg">
