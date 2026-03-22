@@ -502,15 +502,26 @@ function normalizeAssessmentResult(raw, form, locationLabel) {
 }
 
 export default function FloodRiskApp() {
-  const alert = getSeasonalAlert();
+  const seasonalAlert = getSeasonalAlert();
 
   // form state
-  const [form, setForm] = useState({
-    firstName:"", lastName:"", email:"",
-    addressLine:"", city:"", state:"", zip:"",
-    yearBuilt:"", propertyType:"", basement:"",
-    treesOverhanging:"", priorFloodDamage:"", drainageIssues:"",
-  });
+const [form, setForm] = useState({
+  firstName: "",
+  lastName: "",
+  email: "",
+  phone: "",
+  addressLine: "",
+  city: "",
+  state: "",
+  zip: "",
+  yearBuilt: "",
+  propertyType: "",
+  basement: "",
+  treesOverhanging: "",
+  priorFloodDamage: "",
+  drainageIssues: "",
+  interest: ""
+});
   const [addrMode,    setAddrMode]    = useState("full");
   const [addrStatus,  setAddrStatus]  = useState(null);
   const [addrVerified,setAddrVerified]= useState(null);
@@ -553,11 +564,12 @@ export default function FloodRiskApp() {
   // Validate current step
   const validateStep = step => {
     const e = {};
-    if (step === 0) {
-      if (!form.firstName.trim()) e.firstName = "Required";
-      if (!form.lastName.trim()) e.lastName = "Required";
-      if (!form.email.trim() || !/\S+@\S+\.\S+/.test(form.email)) e.email = "Valid email required";
-    }
+  if (step === 0) {
+  if (!form.firstName.trim()) e.firstName = "Required";
+  if (!form.lastName.trim()) e.lastName = "Required";
+  if (!form.email.trim() || !/\S+@\S+\.\S+/.test(form.email)) e.email = "Valid email required";
+  if (!form.phone.trim()) e.phone = "Required";
+}
     if (step === 1) {
       if (addrMode === "full") {
         if (!form.addressLine.trim()) e.addressLine = "Required";
@@ -633,16 +645,22 @@ export default function FloodRiskApp() {
     zipCode: form.zip || "",
     yearBuilt: form.yearBuilt,
     fullName: `${form.firstName} ${form.lastName}`,
-    propertyType: form.propertyType,
-    basementType: form.basement,
+    propertyType:
+      form.propertyType === "Condo / Townhome"
+        ? "Condo / Townhouse"
+        : form.propertyType,
+    basementType:
+      form.basement === "Yes — Full finished basement"
+        ? "Yes – Full finished basement"
+        : form.basement === "Yes — Unfinished basement"
+        ? "Yes - Unfinished basement"
+        : form.basement === "Yes — Partial / crawlspace"
+        ? "Yes- Partial / crawlspace"
+        : form.basement,
     treesOverhang: form.treesOverhanging,
     priorFloodDamage: form.priorFloodDamage,
     drainageIssues: form.drainageIssues,
-    interestArea: Array.isArray(form.interest)
-      ? form.interest
-      : form.interest
-      ? [form.interest]
-      : ["General Information"],
+    interestArea: form.interest ? [form.interest] : ["General Information"],
     riskScore: aiRes?.score ?? null,
     assessmentAnswers: {
       addrMode,
@@ -679,6 +697,32 @@ export default function FloodRiskApp() {
       body: JSON.stringify(payload)
     });
 
+    const submitResult = await response.json();
+
+    if (!response.ok) {
+      throw new Error(submitResult.error || "Submission failed");
+    }
+
+    console.log("Assessment submit success:", submitResult);
+    setPhase("result");
+    setTimeout(() => setBarW(aiRes.score), 150);
+  } catch (err) {
+    console.error("Assessment submit failed:", err);
+    window.alert(err.message || "Something went wrong while saving your assessment.");
+    setPhase("result");
+    setTimeout(() => setBarW(aiRes.score), 150);
+  }
+};
+
+  try {
+    const response = await fetch("/api/assessment-submit", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
     const result = await response.json();
 
     if (!response.ok) {
@@ -703,26 +747,59 @@ export default function FloodRiskApp() {
 
   const payload = {
     firstName: parts[0] || form.firstName,
-    lastName: parts[1] || form.lastName,
+    lastName: parts.slice(1).join(" ") || form.lastName,
     email: form.email,
     phone: lead.phone,
-    streetAddress: result?.location || "",
+    streetAddress: form.addressLine || "",
     city: form.city || "",
     state: form.state || "",
-    zipCode: form.zip,
+    zipCode: form.zip || "",
     yearBuilt: form.yearBuilt,
     fullName: lead.name,
-    propertyType: form.propertyType,
-    basementType: form.basement,
+    propertyType:
+      form.propertyType === "Condo / Townhome"
+        ? "Condo / Townhouse"
+        : form.propertyType,
+    basementType:
+      form.basement === "Yes — Full finished basement"
+        ? "Yes – Full finished basement"
+        : form.basement === "Yes — Unfinished basement"
+        ? "Yes - Unfinished basement"
+        : form.basement === "Yes — Partial / crawlspace"
+        ? "Yes- Partial / crawlspace"
+        : form.basement,
     treesOverhang: form.treesOverhanging,
     priorFloodDamage: form.priorFloodDamage,
     drainageIssues: form.drainageIssues,
     interestArea: lead.interest ? [lead.interest] : ["General Information"],
     riskScore: result?.score ?? null,
     assessmentAnswers: {
-      source: "lead_followup"
+      source: "lead_followup",
+      location: result?.location || ""
     }
   };
+
+  try {
+    const response = await fetch("/api/assessment-submit", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const submitResult = await response.json();
+
+    if (!response.ok) {
+      throw new Error(submitResult.error || "Lead submission failed");
+    }
+
+    setLeadDone(true);
+  } catch (err) {
+    console.error("Lead submit failed:", err);
+    window.alert(err.message || "Something went wrong.");
+  }
+};
 
   try {
     const response = await fetch("/api/assessment-submit", {
@@ -785,11 +862,11 @@ export default function FloodRiskApp() {
       <style>{S}</style>
 
       {/* URGENCY BANNER */}
-      {alert && (
-        <div className="urgency" style={{ background: alert.color }}>
-          <span>{alert.icon}</span>
-          <span><strong>{alert.name}</strong> begins in</span>
-          <span className="urgency-countdown">{alert.days} days</span>
+      {seasonalAlert && (
+  <div className="urgency" style={{ background: seasonalAlert.color }}>
+    <span>{seasonalAlert.icon}</span>
+    <span><strong>{seasonalAlert.name}</strong> begins in</span>
+    <span className="urgency-countdown">{seasonalAlert.days} days</span>
           <span>— Is your home protected?</span>
         </div>
       )}
@@ -855,6 +932,16 @@ export default function FloodRiskApp() {
                     </div>
                     <button className="btn-go" onClick={nextStep}>Continue →</button>
                   </div>
+                  <div className="fld">
+  <label>Phone Number <span className="req">*</span></label>
+  <input
+    placeholder="(555) 555-5555"
+    value={form.phone}
+    className={errs.phone ? "err-field" : ""}
+    onChange={e => set("phone", e.target.value)}
+  />
+  {errs.phone && <div className="err">{errs.phone}</div>}
+</div>
                 )}
 
                 {/* STEP 1 — Property */}
