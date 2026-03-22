@@ -3,7 +3,6 @@ import { useState, useCallback } from "react";
 const FLOOD_REPORT_API_URL = "/api/flood-risk-report";
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const HUBSPOT_API_URL = "/api/hubspot-contact";
 const SMARTY_AUTH_ID = process.env.REACT_APP_SMARTY_AUTH_ID || "";
 const SMARTY_AUTH_TOKEN = process.env.REACT_APP_SMARTY_AUTH_TOKEN || "";
 
