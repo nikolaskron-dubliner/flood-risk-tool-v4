@@ -1051,7 +1051,7 @@ const [form, setForm] = useState({
                     <div className="ri"><div className="ric clim">🌡️</div><div className="rt"><strong>Climate Trend:</strong> {result.bullets.climate}</div></div>
                     {form.treesOverhanging === "Yes" && <div className="ri"><div className="ric" style={{background:"#f0fae8"}}>🌳</div><div className="rt"><strong>Gutter Risk:</strong> Overhanging trees increase debris blockage risk — a common trigger for preventable water intrusion at roof level and along foundations.</div></div>}
                     {form.priorFloodDamage === "Yes" && <div className="ri"><div className="ric" style={{background:"#fff0f0"}}>⚠️</div><div className="rt"><strong>Prior Damage:</strong> Properties with a history of flood damage face statistically higher repeat event risk and may face insurance loading.</div></div>}
-                    {(form.drainageIssues === "Yes" || form.drainageIssues === "Sometimes") && <div className="ri"><div className="ric" style={{background:"#fff8e0"}}>💧</div><div className="rt"><strong>Drainage:</strong> Existing pooling or drainage issues indicate the current landscape is not directing water away effectively — a key risk multiplier.</div></div>}
+                    {(form.drainageIssues === "Yes" || form.drainageIssues === "Sometimes") && <div className="ri"><div className="ric" style={{background:"#fff8e0"}}>💧</div><div className="rt"><strong>Drainage:</strong> Existing pooling or drainage issues indicate the current landscape is not directing water away effectively — a key risk multiplier.</div></div>
                   </div>
                 </div>
               </div>
