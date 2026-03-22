@@ -713,33 +713,6 @@ const [form, setForm] = useState({
     setTimeout(() => setBarW(aiRes.score), 150);
   }
 };
-
-  try {
-    const response = await fetch("/api/assessment-submit", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.error || "Submission failed");
-    }
-
-    console.log("Assessment submit success:", result);
-    setPhase("result");
-    setTimeout(() => setBarW(aiRes.score), 150);
-  } catch (err) {
-    console.error("Assessment submit failed:", err);
-    alert(err.message || "Something went wrong while saving your assessment.");
-    setPhase("result");
-    setTimeout(() => setBarW(aiRes.score), 150);
-  }
-};
-
   const handleLeadSubmit = async () => {
   if (!lead.name || !lead.phone) return;
 
