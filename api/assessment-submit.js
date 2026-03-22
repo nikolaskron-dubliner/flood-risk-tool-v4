@@ -212,14 +212,24 @@ export default async function handler(req, res) {
     }
 
     const hubspotResult = await sendToHubSpot(body);
-    const emailResult = await sendNotificationEmail(body);
 
-    return res.status(200).json({
-      message: "Saved to database, sent to HubSpot, and emailed notification",
-      id: data[0].id,
-      hubspotId: hubspotResult.id,
-      emailId: emailResult.data?.id || null
-    });
+let emailResult = null;
+let emailError = null;
+
+try {
+  emailResult = await sendNotificationEmail(body);
+} catch (err) {
+  emailError = err.message;
+  console.error("Email send failed:", err.message);
+}
+
+return res.status(200).json({
+  message: "Saved to database and sent to HubSpot",
+  id: data[0].id,
+  hubspotId: hubspotResult.id,
+  emailId: emailResult?.data?.id || null,
+  emailError
+});
   } catch (err) {
     return res.status(400).json({ error: err.message });
   }
