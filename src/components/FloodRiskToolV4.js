@@ -627,81 +627,122 @@ export default function FloodRiskApp() {
   const prevStep = () => setFormStep(s => Math.max(0, s-1));
 
   const handleSubmit = async () => {
-    if (!validateStep(2)) return;
-    setPhase("loading"); setDoneSet([]); setStepIdx(0);
+  if (!validateStep(2)) return;
 
-    let location = addrMode === "full"
+  setPhase("loading");
+  setDoneSet([]);
+  setStepIdx(0);
+
+  let location =
+    addrMode === "full"
       ? (addrVerified?.standardized || `${form.addressLine}, ${form.city}, ${form.state} ${form.zip}`)
       : `ZIP Code ${form.zip}`;
-    let zipCity = addrVerified?.city || form.city;
-    let zipState = addrVerified?.state || form.state;
 
-    if (addrMode === "zip") {
-      const zRes = await validateByZip(form.zip);
-      if (zRes.valid) { zipCity = zRes.city; zipState = zRes.state; }
-      location = `${zipCity}, ${zipState} ${form.zip}`;
+  let zipCity = addrVerified?.city || form.city;
+  let zipState = addrVerified?.state || form.state;
+
+  if (addrMode === "zip") {
+    const zRes = await validateByZip(form.zip);
+    if (zRes.valid) {
+      zipCity = zRes.city;
+      zipState = zRes.state;
+    }
+    location = `${zipCity}, ${zipState} ${form.zip}`;
+  }
+
+  const [aiRes] = await Promise.all([
+    (async () => {
+      try {
+        const res = await fetch(FLOOD_REPORT_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ form: { ...form }, location })
+        });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d?.error || "Failed to generate report");
+        return normalizeAssessmentResult(d, form, location);
+      } catch (err) {
+        console.error("Flood report generation failed:", err);
+        return normalizeAssessmentResult(null, form, location);
+      }
+    })(),
+  ]);
+
+  setResult({ ...aiRes, location, zip: form.zip });
+
+  const payload = {
+    firstName: form.firstName,
+    lastName: form.lastName,
+    email: form.email,
+    phone: form.phone || "",
+    streetAddress: form.addressLine || "",
+    city: zipCity || form.city || "",
+    state: zipState || form.state || "",
+    zipCode: form.zip || "",
+    yearBuilt: form.yearBuilt,
+    fullName: `${form.firstName} ${form.lastName}`,
+    propertyType: form.propertyType,
+    basementType: form.basement,
+    treesOverhang: form.treesOverhanging,
+    priorFloodDamage: form.priorFloodDamage,
+    drainageIssues: form.drainageIssues,
+    interestArea: Array.isArray(form.interest)
+      ? form.interest
+      : form.interest
+      ? [form.interest]
+      : ["General Information"],
+    riskScore: aiRes?.score ?? null,
+    assessmentAnswers: {
+      addrMode,
+      location,
+      addressLine: form.addressLine || "",
+      city: zipCity || form.city || "",
+      state: zipState || form.state || "",
+      zip: form.zip || "",
+      propertyType: form.propertyType,
+      basement: form.basement,
+      treesOverhanging: form.treesOverhanging,
+      priorFloodDamage: form.priorFloodDamage,
+      drainageIssues: form.drainageIssues,
+      interest: form.interest || "",
+      tier: aiRes?.tier || "",
+      locationLabel: aiRes?.locationLabel || location,
+      reportSummary: aiRes?.financial?.narrative || ""
+    },
+    utm: {
+      source: new URLSearchParams(window.location.search).get("utm_source"),
+      medium: new URLSearchParams(window.location.search).get("utm_medium"),
+      campaign: new URLSearchParams(window.location.search).get("utm_campaign"),
+      term: new URLSearchParams(window.location.search).get("utm_term"),
+      content: new URLSearchParams(window.location.search).get("utm_content")
+    }
+  };
+
+  try {
+    const response = await fetch("/api/assessment-submit", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || "Submission failed");
     }
 
-        const [aiRes] = await Promise.all([
-      (async () => {
-        try {
-          const res = await fetch(FLOOD_REPORT_API_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ form: { ...form }, location })
-          });
-          const d = await res.json();
-          if (!res.ok) throw new Error(d?.error || "Failed to generate report");
-          return normalizeAssessmentResult(d, form, location);
-        } catch (err) {
-          console.error("Flood report generation failed:", err);
-          return normalizeAssessmentResult(null, form, location);
-        }
-      })(),
-    ]);
-
-    setResult({ ...aiRes, location, zip: form.zip });
-    await saveToDb({
-      firstName: form.firstName,
-      lastName: form.lastName,
-      email: form.email,
-      address: location,
-      zip: form.zip,
-      yearBuilt: form.yearBuilt,
-      propertyType: form.propertyType,
-      basement: form.basement,
-      treesOverhanging: form.treesOverhanging,
-      priorFloodDamage: form.priorFloodDamage,
-      drainageIssues: form.drainageIssues,
-      score: aiRes.score,
-      tier: aiRes.tier
-    });
-
-    await upsertHubSpot({
-      firstName: form.firstName,
-      lastName: form.lastName,
-      email: form.email,
-      phone: form.phone || "",
-      address: form.addressLine || location,
-      zip: form.zip,
-      score: aiRes?.score,
-      tier: aiRes?.tier,
-      propertyType: form.propertyType,
-      yearBuilt: form.yearBuilt,
-      basement: form.basement,
-      interest: form.interest || "",
-      treesOverhanging: form.treesOverhanging,
-      priorFloodDamage: form.priorFloodDamage,
-      drainageIssues: form.drainageIssues,
-      followUpRequested: false,
-      followUpRequestedValue: "No",
-      reportSummary: aiRes?.financial?.narrative || "",
-      locationLabel: aiRes?.locationLabel || location
-    });
-
+    console.log("Assessment submit success:", result);
     setPhase("result");
     setTimeout(() => setBarW(aiRes.score), 150);
-  };
+  } catch (err) {
+    console.error("Assessment submit failed:", err);
+    alert(err.message || "Something went wrong while saving your assessment.");
+    setPhase("result");
+    setTimeout(() => setBarW(aiRes.score), 150);
+  }
+};
 
   const handleLeadSubmit = async () => {
     if (!lead.name || !lead.phone) return;
