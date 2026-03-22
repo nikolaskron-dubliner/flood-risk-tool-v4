@@ -761,28 +761,6 @@ const [form, setForm] = useState({
       body: JSON.stringify(payload)
     });
 
-    const submitResult = await response.json();
-
-    if (!response.ok) {
-      throw new Error(submitResult.error || "Lead submission failed");
-    }
-
-    setLeadDone(true);
-  } catch (err) {
-    console.error("Lead submit failed:", err);
-    window.alert(err.message || "Something went wrong.");
-  }
-};
-
-  try {
-    const response = await fetch("/api/assessment-submit", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
-    });
-
     const result = await response.json();
 
     if (!response.ok) {
