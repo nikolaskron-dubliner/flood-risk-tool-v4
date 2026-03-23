@@ -1271,18 +1271,21 @@ const handleShare = async platform => {
       </label>
 
       <div style={{ position: "relative" }}>
-        <select
-          className="ls2"
-          value={lead.interest}
-          onChange={e => setLead(l => ({ ...l, interest: e.target.value }))}
-          style={{ appearance: "none", WebkitAppearance: "none", paddingRight: 40 }}
-        >
-          <option value="Full Professional Assessment">Full Professional Assessment</option>
-          <option value="Product Recommendations">Product Recommendations</option>
-          <option value="Flood Prevention Planning">Flood Prevention Planning</option>
-          <option value="Insurance & Risk Review">Insurance & Risk Review</option>
-          <option value="General Questions">General Questions</option>
-        </select>
+
+<select
+  className="ls2"
+  value={lead.interest}
+  onChange={e => setLead(l => ({ ...l, interest: e.target.value }))}
+  style={{ appearance: "none", WebkitAppearance: "none", paddingRight: 40 }}
+>
+  <option value="Full Professional Assessment">Full Professional Assessment</option>
+  <option value="Water Diversion Solutions">Product Recommendations</option>
+  <option value="Entry Point Protection">Entry Point Protection</option>
+  <option value="Sump Pumps & Water Removal">Sump Pumps & Water Removal</option>
+  <option value="Infrastructure Protection">Flood Prevention Planning</option>
+  <option value="Emergency Barriers">Emergency Barriers</option>
+  <option value="General Information">General Questions</option>
+</select>
 
         <div
           style={{
