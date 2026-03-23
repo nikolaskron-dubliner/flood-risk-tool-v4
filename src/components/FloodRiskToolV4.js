@@ -349,12 +349,6 @@ const LOAD_STEPS = [
   "Building your personalised report…",
 ];
 
-const INTEREST_OPTS = [
-  "Water Diversion Solutions","Entry Point Protection",
-  "Sump Pumps & Water Removal","Infrastructure Protection",
-  "Emergency Barriers","Full Professional Assessment","General Information",
-];
-
 const FORM_STEPS = ["Your Details","Property Info","Property Condition"];
 
 // ─── ADDRESS VALIDATION ───────────────────────────────────────────────────────
