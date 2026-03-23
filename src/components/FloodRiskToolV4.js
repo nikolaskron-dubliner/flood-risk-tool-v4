@@ -527,12 +527,6 @@ function trackEvent(eventName, payload = {}) {
     console.error("Analytics tracking failed:", err);
   }
 }
-
-    console.log("Analytics event:", eventName, payload);
-  } catch (err) {
-    console.error("Analytics tracking failed:", err);
-  }
-}
 export default function FloodRiskApp() {
   const seasonalAlert = getSeasonalAlert();
 
