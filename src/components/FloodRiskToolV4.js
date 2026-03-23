@@ -664,6 +664,12 @@ trackEvent("flood_assessment_submit_started", {
 
   setResult({ ...aiRes, location, zip: form.zip });
 
+setLead({
+  name: `${form.firstName} ${form.lastName}`.trim(),
+  phone: "",
+  interest: "Full Professional Assessment"
+});
+
   const payload = {
     requirePhone: false,
     firstName: form.firstName,
@@ -736,12 +742,6 @@ trackEvent("flood_assessment_submit_started", {
   tier: aiRes?.tier || "",
   zip: form.zip || "",
   location: location || ""
-});
-
-setLead({
-  name: `${form.firstName} ${form.lastName}`.trim(),
-  phone: "",
-  interest: form.interest || "Full Professional Assessment"
 });
 
     setPhase("result");
