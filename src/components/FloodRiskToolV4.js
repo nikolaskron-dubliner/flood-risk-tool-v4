@@ -1286,10 +1286,7 @@ const handleShare = async platform => {
               <button className="btn-reset" onClick={reset}>← Analyse Another Property</button>
             </div>
           )}
-       <Toast show={copied} message="✓ Link copied to clipboard!" />
-          </div>
-        )}
-        </div>
+         <Toast show={copied} message="✓ Link copied to clipboard!" />
       </div>
     </>
   );
