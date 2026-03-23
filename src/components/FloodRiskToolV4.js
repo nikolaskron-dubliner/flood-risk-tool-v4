@@ -70,18 +70,6 @@ const DIY_CATS = [
   },
 ];
 
-// ─── NURTURE EMAIL SEQUENCE ──────────────────────────────────────────────────
-const NURTURE_SEQUENCE = [
-  { day: 1,   subject: "Your Flood Risk Report + First Steps",          type: "Welcome & Report Summary" },
-  { day: 3,   subject: "The #1 Thing Homeowners Overlook Before a Storm", type: "Education — Gutters & Downspouts" },
-  { day: 7,   subject: "Is Your Sump Pump Ready? Quick 5-Minute Check",  type: "Product Education — Water Removal" },
-  { day: 14,  subject: "How Much Could Flooding Cost You? (Calculator)",  type: "Financial Impact Re-engagement" },
-  { day: 30,  subject: "Seasonal Flood Alert for Your ZIP Code",          type: "Seasonal Urgency" },
-  { day: 60,  subject: "New Products: Smarter Flood Barriers for 2026",   type: "New Product Promotion" },
-  { day: 90,  subject: "It's Been 3 Months — Is Your Home Protected?",    type: "Re-assessment Prompt" },
-  { day: 180, subject: "Hurricane Season Update: Are You Ready?",         type: "Seasonal Campaign" },
-  { day: 365, subject: "Time for Your Annual Flood Risk Re-Assessment",   type: "Annual Renewal" },
-];
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
 const S = `
