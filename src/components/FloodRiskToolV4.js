@@ -1289,26 +1289,76 @@ const handleShare = async platform => {
               <div className="lead-banner">
                 <h2>Ready to Protect Your Home, {form.firstName}?</h2>
                 <p>Connect with a local flood protection specialist. We'll match you with the right products and services — and enrol you in our seasonal protection email series.</p>
-                {!leadDone ? (
-                  <div className="lform">
-                    <div className="lrow">
-                      <input className="li" placeholder="Your full name" value={lead.name} onChange={e=>setLead(l=>({...l,name:e.target.value}))}/>
-                      <input className="li" type="tel" placeholder="Phone number" value={lead.phone} onChange={e=>setLead(l=>({...l,phone:e.target.value}))}/>
-                    </div>
-                    <select className="ls2" value={lead.interest} onChange={e=>setLead(l=>({...l,interest:e.target.value}))}>
-                      <option value="">I'm most interested in…</option>
-                      {INTEREST_OPTS.map(o=><option key={o}>{o}</option>)}
-                    </select>
-                    <button className="btn-lead" onClick={handleLeadSubmit}>Get My Personalized Plan →</button>
-                    <div className="lprivacy">🔒 Your information is never sold. You can unsubscribe from emails at any time.</div>
-                  </div>
-                ) : (
-                  <div className="lsuccess">
-                    <h3>✓ You're all set, {form.firstName}!</h3>
-                    <p>A local specialist will reach out within 1 business day. Watch your inbox for your first flood protection tip shortly.</p>
-                  </div>
-                )}
-              </div>
+               {!leadDone ? (
+  <div className="lform">
+    <div className="lrow">
+      <input
+        className="li"
+        placeholder="Your full name"
+        value={lead.name}
+        onChange={e => setLead(l => ({ ...l, name: e.target.value }))}
+      />
+      <input
+        className="li"
+        type="tel"
+        placeholder="Phone number"
+        value={lead.phone}
+        onChange={e => setLead(l => ({ ...l, phone: e.target.value }))}
+      />
+    </div>
+
+    <div className="fld" style={{ textAlign: "left" }}>
+      <label style={{ fontSize: 12, opacity: 0.85, marginBottom: 6, display: "block" }}>
+        What would you like help with?
+      </label>
+
+      <div style={{ position: "relative" }}>
+        <select
+          className="ls2"
+          value={lead.interest}
+          onChange={e => setLead(l => ({ ...l, interest: e.target.value }))}
+          style={{ appearance: "none", WebkitAppearance: "none", paddingRight: 40 }}
+        >
+          <option value="Full Professional Assessment">Full Professional Assessment</option>
+          <option value="Product Recommendations">Product Recommendations</option>
+          <option value="Flood Prevention Planning">Flood Prevention Planning</option>
+          <option value="Insurance & Risk Review">Insurance & Risk Review</option>
+          <option value="General Questions">General Questions</option>
+        </select>
+
+        <div
+          style={{
+            position: "absolute",
+            right: 14,
+            top: "50%",
+            transform: "translateY(-50%)",
+            pointerEvents: "none",
+            fontSize: 12,
+            opacity: 0.7,
+            color: "#fff"
+          }}
+        >
+          ▼
+        </div>
+      </div>
+    </div>
+
+    <button className="btn-lead" onClick={handleLeadSubmit}>
+      GET MY PERSONALIZED PLAN →
+    </button>
+
+    <div className="lprivacy">
+      🔒 Your information is never sold. You can unsubscribe from emails at any time.
+    </div>
+  </div>
+) : (
+  <div className="lsuccess">
+    <h3>✓ You're all set, {form.firstName}!</h3>
+    <p>
+      A local specialist will reach out within 1 business day. Watch your inbox for your first flood protection tip shortly.
+    </p>
+  </div>
+)}
 
               <button className="btn-reset" onClick={reset}>← Analyse Another Property</button>
             </div>
