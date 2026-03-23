@@ -509,6 +509,7 @@ function Toast({ show, message }) {
     </div>
   );
 }
+
 function trackEvent(eventName, payload = {}) {
   try {
     if (window.gtag) {
@@ -518,7 +519,7 @@ function trackEvent(eventName, payload = {}) {
     if (window.dataLayer) {
       window.dataLayer.push({
         event: eventName,
-        ...payload
+        ...payload,
       });
     }
 
