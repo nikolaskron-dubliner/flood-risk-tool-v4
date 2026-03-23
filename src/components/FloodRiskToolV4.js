@@ -510,6 +510,59 @@ function trackEvent(eventName, payload = {}) {
     console.error("Analytics tracking failed:", err);
   }
 }
+
+function getInsuranceLeadSignals(form, score) {
+  const signals = {
+    hotLead: false,
+    urgentInsuranceReferral: false,
+    risingPremiumOpportunity: false,
+    deniedCoverageRisk: false,
+    priorClaimRisk: false,
+    scoreBand: score >= 75 ? "severe" : score >= 50 ? "high" : score >= 25 ? "moderate" : "low"
+  };
+
+  if ((form.floodInsurance === "No" || form.floodInsurance === "Not sure") && score >= 50) {
+    signals.hotLead = true;
+    signals.urgentInsuranceReferral = true;
+  }
+
+  if (form.floodInsurance === "Yes" && form.premiumIncrease === "Yes") {
+    signals.risingPremiumOpportunity = true;
+  }
+
+  if (form.deniedOrDropped === "Yes") {
+    signals.deniedCoverageRisk = true;
+    signals.hotLead = true;
+  }
+
+  if (form.priorFloodClaim === "Yes" && score >= 50) {
+    signals.priorClaimRisk = true;
+    signals.hotLead = true;
+  }
+
+  return signals;
+}
+
+function getLeadRoute(form, score) {
+  if ((form.floodInsurance === "No" || form.floodInsurance === "Not sure") && score >= 50) {
+    return "insurance_referral_priority";
+  }
+
+  if (form.floodInsurance === "Yes" && form.premiumIncrease === "Yes") {
+    return "mitigation_roi_flow";
+  }
+
+  if (form.deniedOrDropped === "Yes") {
+    return "coverage_recovery_priority";
+  }
+
+  if (form.priorFloodClaim === "Yes" && score >= 50) {
+    return "claim_history_priority";
+  }
+
+  return "standard_followup";
+}
+
 export default function FloodRiskApp() {
   const seasonalAlert = getSeasonalAlert();
 
@@ -529,8 +582,13 @@ const [form, setForm] = useState({
   treesOverhang: "",
   priorFloodDamage: "",
   drainageIssues: "",
-  interest: ""
+  interest: "",
+  floodInsurance: "",
+  priorFloodClaim: "",
+  premiumIncrease: "",
+  deniedOrDropped: ""
 });
+
   const [addrMode,    setAddrMode]    = useState("full");
   const [addrStatus,  setAddrStatus]  = useState(null);
   const [addrVerified,setAddrVerified]= useState(null);
@@ -556,9 +614,18 @@ const [form, setForm] = useState({
   // progress %
   const fields0 = [form.firstName, form.lastName, form.email].filter(Boolean).length;
   const fields1 = [form.zip, form.yearBuilt, form.propertyType, form.basement].filter(Boolean).length;
-  const fields2 = [form.treesOverhang, form.priorFloodDamage, form.drainageIssues].filter(Boolean).length;
-  const totalFilled = fields0 + fields1 + fields2;
-  const totalFields = 3 + 4 + 3;
+  const fields2 = [
+  form.treesOverhang,
+  form.priorFloodDamage,
+  form.drainageIssues,
+  form.floodInsurance,
+  form.priorFloodClaim,
+  form.premiumIncrease,
+  form.deniedOrDropped
+].filter(Boolean).length;
+
+const totalFields = 3 + 4 + 7;
+const totalFilled = fields0 + fields1 + fields2;
   const progressPct = Math.round((totalFilled / totalFields) * 100);
 
   // Address check
@@ -587,10 +654,11 @@ const [form, setForm] = useState({
       }
     }
     if (step === 2) {
-      if (!form.treesOverhang) e.treesOverhang = "Required";
-      if (!form.priorFloodDamage) e.priorFloodDamage = "Required";
-      if (!form.drainageIssues) e.drainageIssues = "Required";
-    }
+  if (!form.treesOverhang) e.treesOverhang = "Required";
+  if (!form.priorFloodDamage) e.priorFloodDamage = "Required";
+  if (!form.drainageIssues) e.drainageIssues = "Required";
+  if (!form.floodInsurance) e.floodInsurance = "Required";
+}
     setErrs(e);
     return Object.keys(e).length === 0;
   };
@@ -662,7 +730,16 @@ trackEvent("flood_assessment_submit_started", {
     })(),
   ]);
 
-  setResult({ ...aiRes, location, zip: form.zip });
+  const insuranceSignals = getInsuranceLeadSignals(form, aiRes?.score ?? 0);
+const leadRoute = getLeadRoute(form, aiRes?.score ?? 0);
+
+setResult({
+  ...aiRes,
+  location,
+  zip: form.zip,
+  insuranceSignals,
+  leadRoute
+});
 
 setLead({
   name: `${form.firstName} ${form.lastName}`.trim(),
@@ -693,6 +770,11 @@ setLead({
     treesOverhang: form.treesOverhang,
     priorFloodDamage: form.priorFloodDamage,
     drainageIssues: form.drainageIssues,
+    floodInsurance: form.floodInsurance,
+    priorFloodClaim: form.priorFloodClaim,
+    premiumIncrease: form.premiumIncrease,
+    deniedOrDropped: form.deniedOrDropped,
+    leadRoute,
     interestArea: form.interest ? [form.interest] : ["General Information"],
     riskScore: aiRes?.score ?? null,
     assessmentAnswers: {
@@ -707,6 +789,11 @@ setLead({
       treesOverhang: form.treesOverhang,
       priorFloodDamage: form.priorFloodDamage,
       drainageIssues: form.drainageIssues,
+      floodInsurance: form.floodInsurance,
+      priorFloodClaim: form.priorFloodClaim,
+      premiumIncrease: form.premiumIncrease,
+      deniedOrDropped: form.deniedOrDropped,
+      leadRoute,
       interest: form.interest || "",
       tier: aiRes?.tier || "",
       locationLabel: aiRes?.locationLabel || location,
@@ -742,6 +829,15 @@ setLead({
   tier: aiRes?.tier || "",
   zip: form.zip || "",
   location: location || ""
+});
+
+trackEvent("flood_insurance_profile_captured", {
+  floodInsurance: form.floodInsurance,
+  priorFloodClaim: form.priorFloodClaim,
+  premiumIncrease: form.premiumIncrease,
+  deniedOrDropped: form.deniedOrDropped,
+  score: aiRes?.score ?? null,
+  leadRoute
 });
 
     setPhase("result");
@@ -781,12 +877,22 @@ setLead({
     treesOverhang: form.treesOverhang,
     priorFloodDamage: form.priorFloodDamage,
     drainageIssues: form.drainageIssues,
+    floodInsurance: form.floodInsurance,
+    priorFloodClaim: form.priorFloodClaim,
+    premiumIncrease: form.premiumIncrease,
+    deniedOrDropped: form.deniedOrDropped,
+    leadRoute: result?.leadRoute || "standard_followup",
     interestArea: lead.interest ? [lead.interest] : ["General Information"],
     riskScore: result?.score ?? null,
     assessmentAnswers: {
-      source: "lead_followup",
-      location: result?.location || ""
-    }
+  source: "lead_followup",
+  location: result?.location || "",
+  floodInsurance: form.floodInsurance,
+  priorFloodClaim: form.priorFloodClaim,
+  premiumIncrease: form.premiumIncrease,
+  deniedOrDropped: form.deniedOrDropped,
+  leadRoute: result?.leadRoute || "standard_followup"
+}
   };
 
   try {
@@ -1056,6 +1162,46 @@ const handleShare = async platform => {
                       <label>Do you notice water pooling or drainage issues near the property?</label>
                       <RadioGroup field="drainageIssues" options={["Yes","No","Sometimes"]}/>
                     </div>
+                    <div style={{marginTop:8}}>
+  <div
+    style={{
+      background:"var(--skylt)",
+      borderRadius:8,
+      padding:"12px 15px",
+      fontSize:13,
+      color:"var(--blue)",
+      marginBottom:10,
+      fontWeight:500
+    }}
+  >
+    Insurance status helps us tailor your recommendations, flag urgency, and identify potential coverage risks.
+  </div>
+
+  <p style={{fontSize:12,color:"var(--sub)",lineHeight:1.6,marginBottom:10}}>
+    These questions help us identify coverage pressure, premium changes, and mitigation opportunities.
+  </p>
+
+  <div className="fld">
+    <label>Do you currently have flood insurance? <span className="req">*</span></label>
+    <RadioGroup field="floodInsurance" options={["Yes","No","Not sure"]}/>
+    {errs.floodInsurance && <div className="err">{errs.floodInsurance}</div>}
+  </div>
+
+  <div className="fld">
+    <label>Have you ever filed a flood claim?</label>
+    <RadioGroup field="priorFloodClaim" options={["Yes","No","Not sure"]}/>
+  </div>
+
+  <div className="fld">
+    <label>Has your premium increased in the last 2–3 years?</label>
+    <RadioGroup field="premiumIncrease" options={["Yes","No","Not sure"]}/>
+  </div>
+
+  <div className="fld">
+    <label>Have you ever been denied coverage or dropped?</label>
+    <RadioGroup field="deniedOrDropped" options={["Yes","No","Not sure"]}/>
+  </div>
+</div>
                     <div style={{display:"flex",gap:10}}>
                       <button className="btn-go" style={{background:"var(--cloud)",color:"var(--sub)",border:"1.5px solid var(--border)",boxShadow:"none",flex:"0 0 auto",width:"auto",padding:"12px 20px"}} onClick={prevStep}>← Back</button>
                       <button className="btn-go" style={{flex:1}} onClick={handleSubmit}>Generate My Free Flood Risk Report →</button>
@@ -1063,7 +1209,7 @@ const handleShare = async platform => {
                   </div>
                 )}
 <div className="trow">
-  {["USPS Verified","FEMA Data","NOAA Rainfall","50-yr History","100% Free"].map(t => (
+{["FEMA Data","Government Stats","Industry Reports","NOAA Rainfall","50-Year History","100% Free"].map(t => (
     <div className="ti" key={t}>
       <span className="tck">✓</span>{t}
     </div>
@@ -1145,6 +1291,62 @@ const handleShare = async platform => {
                   <div className="fnarr">{result.financial.narrative}</div>
                 </div>
               </div>
+
+{result?.insuranceSignals?.urgentInsuranceReferral && (
+  <div className="sec">
+    <div className="sec-hd">
+      <span className="sec-ico">🔥</span>
+      <span className="sec-title">Insurance Risk Alert</span>
+    </div>
+    <div className="sec-body">
+      <p style={{fontSize:13,color:"var(--sub)",lineHeight:1.7}}>
+        Based on your flood risk and current insurance status, you may benefit from immediate guidance on coverage options and mitigation steps.
+      </p>
+    </div>
+  </div>
+)}
+
+{result?.insuranceSignals?.risingPremiumOpportunity && (
+  <div className="sec">
+    <div className="sec-hd">
+      <span className="sec-ico">📈</span>
+      <span className="sec-title">Premium Pressure Identified</span>
+    </div>
+    <div className="sec-body">
+      <p style={{fontSize:13,color:"var(--sub)",lineHeight:1.7}}>
+        Rising premiums may indicate growing insurer concern. Risk-reduction improvements could help strengthen your long-term insurability and clarify mitigation ROI.
+      </p>
+    </div>
+  </div>
+)}
+
+{result?.insuranceSignals?.deniedCoverageRisk && (
+  <div className="sec">
+    <div className="sec-hd">
+      <span className="sec-ico">⚠️</span>
+      <span className="sec-title">Coverage Access Concern</span>
+    </div>
+    <div className="sec-body">
+      <p style={{fontSize:13,color:"var(--sub)",lineHeight:1.7}}>
+        A history of denied or dropped coverage can be a major risk signal. Mitigation planning and specialist review should be prioritized.
+      </p>
+    </div>
+  </div>
+)}
+
+{result?.insuranceSignals?.priorClaimRisk && (
+  <div className="sec">
+    <div className="sec-hd">
+      <span className="sec-ico">📄</span>
+      <span className="sec-title">Claim History Risk Signal</span>
+    </div>
+    <div className="sec-body">
+      <p style={{fontSize:13,color:"var(--sub)",lineHeight:1.7}}>
+        A prior flood claim combined with current exposure can increase urgency around mitigation, documentation, and insurance strategy.
+      </p>
+    </div>
+  </div>
+)}
 
               {/* CALCULATOR */}
               <div className="sec">
