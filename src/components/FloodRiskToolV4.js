@@ -500,7 +500,33 @@ function normalizeAssessmentResult(raw, form, locationLabel) {
     ]
   };
 }
+function Toast({ show, message }) {
+  if (!show) return null;
 
+  return (
+    <div className="copied-toast" role="status" aria-live="polite">
+      {message}
+    </div>
+  );
+}
+function trackEvent(eventName, payload = {}) {
+  try {
+    if (window.gtag) {
+      window.gtag("event", eventName, payload);
+    }
+
+    if (window.dataLayer) {
+      window.dataLayer.push({
+        event: eventName,
+        ...payload
+      });
+    }
+
+    console.log("Analytics event:", eventName, payload);
+  } catch (err) {
+    console.error("Analytics tracking failed:", err);
+  }
+}
 export default function FloodRiskApp() {
   const seasonalAlert = getSeasonalAlert();
 
@@ -586,11 +612,33 @@ const [form, setForm] = useState({
     return Object.keys(e).length === 0;
   };
 
-  const nextStep = () => { if (validateStep(formStep)) setFormStep(s => Math.min(2, s+1)); };
+  const nextStep = () => {
+  if (validateStep(formStep)) {
+    trackEvent("flood_assessment_step_completed", {
+      step: formStep + 1,
+      stepName: FORM_STEPS[formStep]
+    });
+    setFormStep(s => Math.min(2, s + 1));
+  } else {
+    trackEvent("flood_assessment_step_validation_failed", {
+      step: formStep + 1,
+      stepName: FORM_STEPS[formStep]
+    });
+  }
+};
   const prevStep = () => setFormStep(s => Math.max(0, s-1));
 
   const handleSubmit = async () => {
   if (!validateStep(2)) return;
+
+trackEvent("flood_assessment_submit_started", {
+  addrMode,
+  zip: form.zip || "",
+  hasAddress: Boolean(form.addressLine),
+  hasYearBuilt: Boolean(form.yearBuilt),
+  hasPropertyType: Boolean(form.propertyType),
+  hasBasement: Boolean(form.basement)
+});
 
   setPhase("loading");
   setDoneSet([]);
@@ -703,6 +751,12 @@ const [form, setForm] = useState({
     }
 
     console.log("Assessment submit success:", submitResult);
+    trackEvent("flood_assessment_result_viewed", {
+  score: aiRes?.score ?? null,
+  tier: aiRes?.tier || "",
+  zip: form.zip || "",
+  location: location || ""
+});
     setPhase("result");
     setTimeout(() => setBarW(aiRes.score), 150);
   } catch (err) {
@@ -767,26 +821,58 @@ const [form, setForm] = useState({
     }
 
     setLeadDone(true);
+    trackEvent("flood_assessment_lead_submitted", {
+  score: result?.score ?? null,
+  tier: result?.tier || "",
+  interest: lead.interest || "General Information",
+  zip: form.zip || ""
+});
   } catch (err) {
     console.error("Lead submit failed:", err);
     alert(err.message || "Something went wrong.");
   }
 };
 
-  const handleShare = platform => {
-    const score = result?.score || 0;
-    const tier  = tierLabel(score);
-    const text  = `My home just scored ${score}/100 on the Flood Risk Assessment — ${tier}. Find out your risk at oiriunu.com`;
-    const urls  = {
-      fb: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent("https://oiriunu.com")}&quote=${encodeURIComponent(text)}`,
-      tw: `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`,
-      li: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent("https://oiriunu.com")}&summary=${encodeURIComponent(text)}`,
-    };
-    if (platform === "copy") {
-      navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(()=>setCopied(false),2500); });
-    } else {
-      window.open(urls[platform], "_blank", "width=600,height=400");
+const handleShare = async platform => {
+  const score = result?.score || 0;
+  const tier = tierLabel(score);
+  const text = `My home just scored ${score}/100 on the Flood Risk Assessment — ${tier}. Find out your risk at oiriunu.com`;
+
+  const urls = {
+    fb: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent("https://oiriunu.com")}&quote=${encodeURIComponent(text)}`,
+    tw: `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`,
+    li: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent("https://oiriunu.com")}&summary=${encodeURIComponent(text)}`
+  };
+
+  if (platform === "copy") {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      trackEvent("flood_report_share_copy", {
+        score,
+        tier,
+        location: result?.location || "",
+        method: "copy_link"
+      });
+      setTimeout(() => setCopied(false), 2500);
+    } catch (err) {
+      console.error("Copy failed:", err);
+      trackEvent("flood_report_share_copy_failed", {
+        score,
+        tier,
+        location: result?.location || "",
+        method: "copy_link"
+      });
     }
+  } else {
+    trackEvent("flood_report_share_click", {
+      score,
+      tier,
+      platform,
+      location: result?.location || ""
+    });
+
+    window.open(urls[platform], "_blank", "width=600,height=400");
   };
 
   const reset = () => { setPhase("form"); setResult(null); setBarW(0); setAddrStatus(null); setAddrVerified(null); setAddrMode("full"); setLead({name:"",phone:"",interest:""}); setLeadDone(false); setErrs({}); setFormStep(0); };
@@ -1200,9 +1286,7 @@ const [form, setForm] = useState({
               <button className="btn-reset" onClick={reset}>← Analyse Another Property</button>
             </div>
           )}
-        {copied && (
-          <div className="copied-toast">
-            &#10003; Link copied to clipboard!
+       <Toast show={copied} message="✓ Link copied to clipboard!" />
           </div>
         )}
         </div>
