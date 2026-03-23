@@ -865,7 +865,7 @@ const handleShare = async platform => {
         method: "copy_link"
       });
     }
-  } else {
+   } else {
     trackEvent("flood_report_share_click", {
       score,
       tier,
@@ -874,7 +874,8 @@ const handleShare = async platform => {
     });
 
     window.open(urls[platform], "_blank", "width=600,height=400");
-  };
+  }
+};
 
   const reset = () => { setPhase("form"); setResult(null); setBarW(0); setAddrStatus(null); setAddrVerified(null); setAddrMode("full"); setLead({name:"",phone:"",interest:""}); setLeadDone(false); setErrs({}); setFormStep(0); };
 
