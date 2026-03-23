@@ -529,7 +529,7 @@ const [form, setForm] = useState({
   treesOverhang: "",
   priorFloodDamage: "",
   drainageIssues: "",
-  interest: "Full Professional Assessment"
+  interest: ""
 });
   const [addrMode,    setAddrMode]    = useState("full");
   const [addrStatus,  setAddrStatus]  = useState(null);
@@ -675,10 +675,7 @@ trackEvent("flood_assessment_submit_started", {
     zipCode: form.zip || "",
     yearBuilt: form.yearBuilt,
     fullName: `${form.firstName} ${form.lastName}`,
-    propertyType:
-      form.propertyType === "Condo / Townhome"
-        ? "Condo / Townhouse"
-        : form.propertyType,
+    propertyType: form.propertyType,
     basementType:
       form.basement === "Yes — Full finished basement"
         ? "Yes – Full finished basement"
@@ -772,10 +769,7 @@ setLead({
     zipCode: form.zip || "",
     yearBuilt: form.yearBuilt,
     fullName: lead.name,
-    propertyType:
-      form.propertyType === "Condo / Townhome"
-        ? "Condo / Townhouse"
-        : form.propertyType,
+    propertyType: form.propertyType,
     basementType:
       form.basement === "Yes — Full finished basement"
         ? "Yes – Full finished basement"
