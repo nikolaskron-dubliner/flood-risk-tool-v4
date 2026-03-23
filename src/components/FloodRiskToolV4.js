@@ -1323,7 +1323,7 @@ const handleShare = async platform => {
     </p>
   </div>
 )}
-
+</div>
               <button className="btn-reset" onClick={reset}>← Analyse Another Property</button>
             </div>
           )}
