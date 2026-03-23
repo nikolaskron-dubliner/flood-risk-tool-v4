@@ -758,6 +758,13 @@ trackEvent("flood_assessment_submit_started", {
   zip: form.zip || "",
   location: location || ""
 });
+
+setLead({
+  name: `${form.firstName} ${form.lastName}`.trim(),
+  phone: "",
+  interest: form.interest || "General Information"
+});
+
     setPhase("result");
     setTimeout(() => setBarW(aiRes.score), 150);
   } catch (err) {
@@ -1236,29 +1243,76 @@ const handleShare = async platform => {
                 </div>
               </div>
 
-              {/* Email Nurture Sequence */}
-              <div className="sec">
-                <div className="sec-hd"><span className="sec-ico">📧</span><span className="sec-title">Your Protection Journey — What Happens Next</span></div>
-                <div className="sec-body">
-                  <p style={{fontSize:13,color:"var(--sub)",marginBottom:16,lineHeight:1.6}}>
-                    When you connect with a specialist below, you'll also receive our expert flood protection email series — seasonal alerts, product tips, and annual re-assessment reminders to keep your home protected year-round.
-                  </p>
-                  <div className="nurture-list">
-                    {NURTURE_SEQUENCE.map((n,i)=>(
-                      <div className="nurture-item" key={i}>
-                        <div className="nurture-day">
-                          <div className="nd-num">{n.day<365?`D${n.day}`:"1yr"}</div>
-                          <div className="nd-lbl">{n.day===1?"Day":n.day<365?"Day":"Year"}</div>
-                        </div>
-                        <div className="nurture-content">
-                          <div className="nurture-subject">{n.subject}</div>
-                          <div className="nurture-type">{n.type}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+{/* Email Nurture + Lead Conversion */}
+<div className="sec">
+  <div className="sec-hd">
+    <span className="sec-ico">📧</span>
+    <span className="sec-title">What Happens After You Get Your Results</span>
+  </div>
+
+  <div className="sec-body">
+    <p style={{fontSize:13,color:"var(--sub)",marginBottom:8,lineHeight:1.6}}>
+      When you connect with a specialist below, you'll receive expert flood protection insights — including seasonal alerts, product recommendations, and periodic check-ins to help keep your home protected year-round.
+    </p>
+
+    <p style={{fontSize:12,color:"var(--sub)",opacity:0.85,textAlign:"center",marginBottom:14}}>
+      No spam — just practical guidance tailored to your property.
+    </p>
+  </div>
+</div>
+
+{/* Lead CTA */}
+<div className="lead-banner">
+  <h2>Get a Personalized Protection Plan</h2>
+
+  <p style={{marginBottom:14}}>
+    Based on your results, a local specialist can help you identify the most effective next steps for your home and budget.
+  </p>
+
+  {!leadDone ? (
+    <div className="lform">
+      <div className="lrow">
+        <input
+          className="li"
+          placeholder="Your full name"
+          value={lead.name}
+          onChange={e=>setLead(l=>({...l,name:e.target.value}))}
+        />
+        <input
+          className="li"
+          type="tel"
+          placeholder="Phone number"
+          value={lead.phone}
+          onChange={e=>setLead(l=>({...l,phone:e.target.value}))}
+        />
+      </div>
+
+      <select
+        className="ls2"
+        value={lead.interest}
+        onChange={e=>setLead(l=>({...l,interest:e.target.value}))}
+      >
+        <option value="">What are you most interested in?</option>
+        {INTEREST_OPTS.map(o=><option key={o}>{o}</option>)}
+      </select>
+
+      <button className="btn-lead" onClick={handleLeadSubmit}>
+        Get My Protection Plan →
+      </button>
+
+      <div className="lprivacy">
+        🔒 No obligation. Your information is never sold.
+      </div>
+    </div>
+  ) : (
+    <div className="lsuccess">
+      <h3>✓ You're all set, {form.firstName}!</h3>
+      <p>
+        A local specialist will reach out within 1 business day. Watch your inbox for your first protection tip shortly.
+      </p>
+    </div>
+  )}
+</div>
 
               {/* Lead CTA */}
               <div className="lead-banner">
