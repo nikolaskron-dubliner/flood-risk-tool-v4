@@ -553,7 +553,7 @@ const [form, setForm] = useState({
   const [barW,    setBarW]    = useState(0);
 
   // lead / share
-  const [lead,     setLead]     = useState({ name:"", phone:"", interest:"" });
+  const [lead,     setLead]     = useState({ name:"", phone:"", interest:"Full Professional Assessment" });
   const [leadDone, setLeadDone] = useState(false);
   const [copied,   setCopied]   = useState(false);
 
@@ -810,14 +810,14 @@ setLead({
       body: JSON.stringify(payload)
     });
 
-    const result = await response.json();
+    const submitResult = await response.json();
 
-    if (!response.ok) {
-      throw new Error(result.error || "Lead submission failed");
-    }
+if (!response.ok) {
+  throw new Error(submitResult.error || "Lead submission failed");
+}
 
-    setLeadDone(true);
-    trackEvent("flood_assessment_lead_submitted", {
+setLeadDone(true);
+trackEvent("flood_assessment_lead_submitted", {
   score: result?.score ?? null,
   tier: result?.tier || "",
   interest: lead.interest || "General Information",
@@ -872,7 +872,7 @@ const handleShare = async platform => {
   }
 };
 
-  const reset = () => { setPhase("form"); setResult(null); setBarW(0); setAddrStatus(null); setAddrVerified(null); setAddrMode("full"); setLead({name:"",phone:"",interest:""}); setLeadDone(false); setErrs({}); setFormStep(0); };
+  const reset = () => { setPhase("form"); setResult(null); setBarW(0); setAddrStatus(null); setAddrVerified(null); setAddrMode("full"); setLead({name:"",phone:"",interest:"Full Professional Assessment"}); setLeadDone(false); setErrs({}); setFormStep(0); };
 
   const tc = result ? tierCls(result.score) : "";
   const hasBasement = form.basement && form.basement !== "No basement";
