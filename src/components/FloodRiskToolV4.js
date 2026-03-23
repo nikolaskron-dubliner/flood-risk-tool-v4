@@ -535,7 +535,7 @@ const [form, setForm] = useState({
   treesOverhang: "",
   priorFloodDamage: "",
   drainageIssues: "",
-  interest: ""
+  interest: "Full Professional Assessment"
 });
   const [addrMode,    setAddrMode]    = useState("full");
   const [addrStatus,  setAddrStatus]  = useState(null);
@@ -750,7 +750,7 @@ trackEvent("flood_assessment_submit_started", {
 setLead({
   name: `${form.firstName} ${form.lastName}`.trim(),
   phone: "",
-  interest: form.interest || "General Information"
+  interest: form.interest || "Full Professional Assessment"
 });
 
     setPhase("result");
@@ -1249,57 +1249,40 @@ const handleShare = async platform => {
   </div>
 </div>
 
-{/* Lead CTA */}
-<div className="lead-banner">
-  <h2>Get a Personalized Protection Plan</h2>
+<div className="fld">
+  <label style={{fontSize:12,opacity:0.85,marginBottom:4,display:"block"}}>
+    What would you like help with?
+  </label>
 
-  <p style={{marginBottom:14}}>
-    Based on your results, a local specialist can help you identify the most effective next steps for your home and budget.
-  </p>
+  <div style={{position:"relative"}}>
+    <select
+      className="ls2"
+      value={lead.interest}
+      onChange={e=>setLead(l=>({...l,interest:e.target.value}))}
+      style={{appearance:"none",paddingRight:40}}
+    >
+      <option value="Full Professional Assessment">Full Professional Assessment</option>
+      <option value="Product Recommendations">Product Recommendations</option>
+      <option value="Flood Prevention Planning">Flood Prevention Planning</option>
+      <option value="Insurance & Risk Review">Insurance & Risk Review</option>
+      <option value="General Questions">General Questions</option>
+    </select>
 
-  {!leadDone ? (
-    <div className="lform">
-      <div className="lrow">
-        <input
-          className="li"
-          placeholder="Your full name"
-          value={lead.name}
-          onChange={e=>setLead(l=>({...l,name:e.target.value}))}
-        />
-        <input
-          className="li"
-          type="tel"
-          placeholder="Phone number"
-          value={lead.phone}
-          onChange={e=>setLead(l=>({...l,phone:e.target.value}))}
-        />
-      </div>
-
-      <select
-        className="ls2"
-        value={lead.interest}
-        onChange={e=>setLead(l=>({...l,interest:e.target.value}))}
-      >
-        <option value="">What are you most interested in?</option>
-        {INTEREST_OPTS.map(o=><option key={o}>{o}</option>)}
-      </select>
-
-      <button className="btn-lead" onClick={handleLeadSubmit}>
-        Get My Protection Plan →
-      </button>
-
-      <div className="lprivacy">
-        🔒 No obligation. Your information is never sold.
-      </div>
+    {/* Dropdown arrow */}
+    <div
+      style={{
+        position:"absolute",
+        right:12,
+        top:"50%",
+        transform:"translateY(-50%)",
+        pointerEvents:"none",
+        fontSize:12,
+        opacity:0.7
+      }}
+    >
+      ▼
     </div>
-  ) : (
-    <div className="lsuccess">
-      <h3>✓ You're all set, {form.firstName}!</h3>
-      <p>
-        A local specialist will reach out within 1 business day. Watch your inbox for your first protection tip shortly.
-      </p>
-    </div>
-  )}
+  </div>
 </div>
 
               {/* Lead CTA */}
@@ -1316,7 +1299,7 @@ const handleShare = async platform => {
                       <option value="">I'm most interested in…</option>
                       {INTEREST_OPTS.map(o=><option key={o}>{o}</option>)}
                     </select>
-                    <button className="btn-lead" onClick={handleLeadSubmit}>Connect Me With a Specialist →</button>
+                    <button className="btn-lead" onClick={handleLeadSubmit}>Get My Personalized Plan →</button>
                     <div className="lprivacy">🔒 Your information is never sold. You can unsubscribe from emails at any time.</div>
                   </div>
                 ) : (
