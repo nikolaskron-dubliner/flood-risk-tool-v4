@@ -1249,42 +1249,6 @@ const handleShare = async platform => {
   </div>
 </div>
 
-<div className="fld">
-  <label style={{fontSize:12,opacity:0.85,marginBottom:4,display:"block"}}>
-    What would you like help with?
-  </label>
-
-  <div style={{position:"relative"}}>
-    <select
-      className="ls2"
-      value={lead.interest}
-      onChange={e=>setLead(l=>({...l,interest:e.target.value}))}
-      style={{appearance:"none",paddingRight:40}}
-    >
-      <option value="Full Professional Assessment">Full Professional Assessment</option>
-      <option value="Product Recommendations">Product Recommendations</option>
-      <option value="Flood Prevention Planning">Flood Prevention Planning</option>
-      <option value="Insurance & Risk Review">Insurance & Risk Review</option>
-      <option value="General Questions">General Questions</option>
-    </select>
-
-    {/* Dropdown arrow */}
-    <div
-      style={{
-        position:"absolute",
-        right:12,
-        top:"50%",
-        transform:"translateY(-50%)",
-        pointerEvents:"none",
-        fontSize:12,
-        opacity:0.7
-      }}
-    >
-      ▼
-    </div>
-  </div>
-</div>
-
               {/* Lead CTA */}
               <div className="lead-banner">
                 <h2>Ready to Protect Your Home, {form.firstName}?</h2>
