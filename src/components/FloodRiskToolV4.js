@@ -562,7 +562,63 @@ function getLeadRoute(form, score) {
 
   return "standard_followup";
 }
+function clampScore(n) {
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
 
+function getPropertyVulnerabilityScore(form, floodExposureScore) {
+  let score = 35;
+
+  if (form.priorFloodDamage === "Yes") score += 18;
+  if (form.drainageIssues === "Yes") score += 16;
+  if (form.drainageIssues === "Sometimes") score += 8;
+  if (form.treesOverhang === "Yes") score += 8;
+
+  if (form.basement === "Yes — Full finished basement") score += 14;
+  if (form.basement === "Yes — Unfinished basement") score += 10;
+  if (form.basement === "Yes — Partial / crawlspace") score += 8;
+
+  if (form.propertyType === "Single Family Home") score += 6;
+  if (form.propertyType === "Multi-Family") score += 8;
+  if (form.propertyType === "Commercial") score += 10;
+
+  const year = Number(form.yearBuilt);
+  if (!Number.isNaN(year) && year > 0) {
+    if (year < 1980) score += 10;
+    else if (year < 2000) score += 6;
+    else if (year < 2015) score += 3;
+  }
+
+  if (floodExposureScore >= 75) score += 8;
+  else if (floodExposureScore >= 50) score += 4;
+
+  return clampScore(score);
+}
+
+function getInsuranceRiskScore(form, floodExposureScore) {
+  let score = 30;
+
+  if (form.floodInsurance === "No") score += 28;
+  if (form.floodInsurance === "Not sure") score += 18;
+  if (form.floodInsurance === "Yes") score += 4;
+
+  if (form.priorFloodClaim === "Yes") score += 18;
+  if (form.premiumIncrease === "Yes") score += 16;
+  if (form.deniedOrDropped === "Yes") score += 22;
+
+  if (floodExposureScore >= 75) score += 10;
+  else if (floodExposureScore >= 50) score += 6;
+
+  return clampScore(score);
+}
+
+function getOverallPropertyRiskScore(floodExposure, propertyVulnerability, insuranceRisk) {
+  return clampScore(
+    floodExposure * 0.45 +
+    propertyVulnerability * 0.35 +
+    insuranceRisk * 0.20
+  );
+}
 export default function FloodRiskApp() {
   const seasonalAlert = getSeasonalAlert();
 
@@ -730,15 +786,44 @@ trackEvent("flood_assessment_submit_started", {
     })(),
   ]);
 
-  const insuranceSignals = getInsuranceLeadSignals(form, aiRes?.score ?? 0);
-const leadRoute = getLeadRoute(form, aiRes?.score ?? 0);
+const floodExposureScore = aiRes?.score ?? 0;
+const propertyVulnerabilityScore = getPropertyVulnerabilityScore(form, floodExposureScore);
+const insuranceRiskScore = getInsuranceRiskScore(form, floodExposureScore);
+const overallRiskScore = getOverallPropertyRiskScore(
+  floodExposureScore,
+  propertyVulnerabilityScore,
+  insuranceRiskScore
+);
+
+console.log("RISK MODEL OUTPUT", {
+  floodExposureScore,
+  propertyVulnerabilityScore,
+  insuranceRiskScore,
+  overallRiskScore,
+  insuranceInputs: {
+    floodInsurance: form.floodInsurance,
+    priorFloodClaim: form.priorFloodClaim,
+    premiumIncrease: form.premiumIncrease,
+    deniedOrDropped: form.deniedOrDropped
+  }
+});
+
+const insuranceSignals = getInsuranceLeadSignals(form, overallRiskScore);
+const leadRoute = getLeadRoute(form, overallRiskScore);
 
 setResult({
   ...aiRes,
+  score: overallRiskScore,
   location,
   zip: form.zip,
   insuranceSignals,
-  leadRoute
+  leadRoute,
+  breakdown: {
+    floodExposure: floodExposureScore,
+    propertyVulnerability: propertyVulnerabilityScore,
+    insuranceRisk: insuranceRiskScore,
+    overallRisk: overallRiskScore
+  }
 });
 
 setLead({
@@ -776,7 +861,7 @@ setLead({
     deniedOrDropped: form.deniedOrDropped,
     leadRoute,
     interestArea: form.interest ? [form.interest] : ["General Information"],
-    riskScore: aiRes?.score ?? null,
+    riskScore: overallRiskScore ?? null,
     assessmentAnswers: {
       addrMode,
       location,
@@ -824,8 +909,8 @@ setLead({
     }
 
     console.log("Assessment submit success:", submitResult);
-    trackEvent("flood_assessment_result_viewed", {
-  score: aiRes?.score ?? null,
+    trackEvent("property_risk_result_viewed", {
+  score: overallRiskScore ?? null,
   tier: aiRes?.tier || "",
   zip: form.zip || "",
   location: location || ""
@@ -836,17 +921,17 @@ trackEvent("flood_insurance_profile_captured", {
   priorFloodClaim: form.priorFloodClaim,
   premiumIncrease: form.premiumIncrease,
   deniedOrDropped: form.deniedOrDropped,
-  score: aiRes?.score ?? null,
+  score: overallRiskScore ?? null,
   leadRoute
 });
 
     setPhase("result");
-    setTimeout(() => setBarW(aiRes.score), 150);
+    setTimeout(() => setBarW(overallRiskScore), 150);
   } catch (err) {
     console.error("Assessment submit failed:", err);
     window.alert(err.message || "Something went wrong while saving your assessment.");
     setPhase("result");
-    setTimeout(() => setBarW(aiRes.score), 150);
+    setTimeout(() => setBarW(overallRiskScore), 150);
   }
 };
   const handleLeadSubmit = async () => {
@@ -911,7 +996,7 @@ if (!response.ok) {
 }
 
 setLeadDone(true);
-trackEvent("flood_assessment_lead_submitted", {
+trackEvent("property_risk_lead_submitted", {
   score: result?.score ?? null,
   tier: result?.tier || "",
   interest: lead.interest || "General Information",
@@ -926,8 +1011,7 @@ trackEvent("flood_assessment_lead_submitted", {
 const handleShare = async platform => {
   const score = result?.score || 0;
   const tier = tierLabel(score);
-  const text = `My home just scored ${score}/100 on the Flood Risk Assessment — ${tier}. Find out your risk at oiriunu.com`;
-
+const text = `My home just scored ${score}/100 on the Property Risk Assessment — ${tier}. Find out your risk at oiriunu.com`;
   const urls = {
     fb: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent("https://oiriunu.com")}&quote=${encodeURIComponent(text)}`,
     tw: `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`,
@@ -971,6 +1055,7 @@ const handleShare = async platform => {
   const tc = result ? tierCls(result.score) : "";
   const hasBasement = form.basement && form.basement !== "No basement";
   const activeCats  = result ? DIY_CATS.filter(c => !result.diyCategories || result.diyCategories.includes(c.id)) : DIY_CATS;
+  const route = result?.leadRoute || "standard_followup";
 
   // Radio helper
   const RadioGroup = ({ field, options }) => (
@@ -1240,18 +1325,18 @@ const handleShare = async platform => {
               {/* Score hero */}
               <div className="sh">
                 <div className="sh-top">
-                  <div className="sh-greet">Hi {form.firstName}, here is your personalised flood risk snapshot</div>
+                  <div className="sh-greet">Hi {form.firstName}, here is your personalized property risk snapshot</div>
                   <div className="sh-addr">📍 {result.location}</div>
                   <div className="sh-flex">
                     <div><div className="sh-num">{result.score}<span className="sh-den">/100</span></div></div>
                     <div className="sh-right">
                       <div className="tp">{tierLabel(result.score)}</div>
                       <div className="sh-desc">
-                        {result.score < 25 && `${form.firstName}, your property shows low flood exposure. Staying informed and maintaining drainage remains important.`}
-                        {result.score >= 25 && result.score < 50 && `${form.firstName}, moderate exposure detected. Proactive steps now can prevent significantly costlier damage later.`}
-                        {result.score >= 50 && result.score < 75 && `${form.firstName}, elevated flood risk detected. Without protective measures, significant structural and financial damage is possible.`}
-                        {result.score >= 75 && `${form.firstName}, severe flood risk identified. We strongly recommend reviewing mitigation options and insurance coverage right away.`}
-                      </div>
+  {result.score < 25 && `${form.firstName}, your property shows relatively low overall risk. Staying informed, maintaining drainage, and reviewing coverage remain important.`}
+  {result.score >= 25 && result.score < 50 && `${form.firstName}, moderate property risk is present. Flood exposure, home vulnerability, and insurance pressure suggest proactive mitigation is worthwhile.`}
+  {result.score >= 50 && result.score < 75 && `${form.firstName}, elevated property risk is present. Your flood exposure, property conditions, and financial/insurance risk indicate that delaying action may become costly.`}
+  {result.score >= 75 && `${form.firstName}, severe property risk is identified. Your property, financial exposure, and insurance profile suggest immediate mitigation and specialist review are strongly recommended.`}
+</div>
                     </div>
                   </div>
                   <div className="sh-bar"><div className="sh-fill" style={{width:`${barW}%`}}/></div>
@@ -1291,6 +1376,67 @@ const handleShare = async platform => {
                   <div className="fnarr">{result.financial.narrative}</div>
                 </div>
               </div>
+
+<div className="sec">
+  <div className="sec-hd">
+    <span className="sec-ico">🧭</span>
+    <span className="sec-title">Your Risk Breakdown</span>
+  </div>
+  <div className="sec-body">
+    <div className="fin-grid">
+      <div className="fbox fb-b">
+        <div className="flbl">Flood Exposure</div>
+        <div className="famt">{result?.breakdown?.floodExposure ?? result.score}</div>
+        <div className="fnote">Based on location, FEMA data, weather history, and rainfall patterns</div>
+      </div>
+
+      <div className="fbox fb-o">
+        <div className="flbl">Property Vulnerability</div>
+        <div className="famt">{result?.breakdown?.propertyVulnerability ?? result.score}</div>
+        <div className="fnote">Based on drainage, prior damage, home features, and property conditions</div>
+      </div>
+
+      <div className="fbox fb-r">
+        <div className="flbl">Insurance Risk</div>
+        <div className="famt">{result?.breakdown?.insuranceRisk ?? result.score}</div>
+        <div className="fnote">Based on coverage status, premiums, claims, and insurability pressure</div>
+      </div>
+
+      <div className="fbox fb-g">
+        <div className="flbl">Overall Property Risk Score</div>
+        <div className="famt">{result?.breakdown?.overallRisk ?? result.score}</div>
+        <div className="fnote">Combined view of physical, property, and financial exposure</div>
+      </div>
+    </div>
+
+<div className="sec">
+  <div className="sec-hd">
+    <span className="sec-ico">✅</span>
+    <span className="sec-title">What To Do Next</span>
+  </div>
+  <div className="sec-body">
+    <div className="rlist">
+      <div className="ri">
+        <div className="ric geo">🌊</div>
+        <div className="rt"><strong>Flood Exposure:</strong> Review physical flood pathways and local hazard patterns.</div>
+      </div>
+      <div className="ri">
+        <div className="ric hist">🏠</div>
+        <div className="rt"><strong>Property Vulnerability:</strong> Prioritize drainage, water entry points, and structural weak spots.</div>
+      </div>
+      <div className="ri">
+        <div className="ric clim">🛡️</div>
+        <div className="rt"><strong>Insurance Risk:</strong> Review coverage status, premium trends, and mitigation steps that may strengthen insurability.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    <div className="fnarr">
+      We don’t just show flood risk. We show what that risk means for your property, your finances, and what to do next.
+    </div>
+  </div>
+</div>
 
 {result?.insuranceSignals?.urgentInsuranceReferral && (
   <div className="sec">
@@ -1439,10 +1585,33 @@ const handleShare = async platform => {
   </div>
 </div>
 
+{result?.insuranceSignals?.hotLead && (
+  <div style={{
+    background:"#fff3cd",
+    border:"1px solid #ffeeba",
+    borderRadius:8,
+    padding:"10px 14px",
+    fontSize:13,
+    marginBottom:12,
+    color:"#856404",
+    textAlign:"center"
+  }}>
+    ⚠️ Based on your flood risk and insurance profile, this property may need immediate attention.
+  </div>
+)}
+
               {/* Lead CTA */}
               <div className="lead-banner">
-                <h2>Ready to Protect Your Home, {form.firstName}?</h2>
-                <p>Connect with a local flood protection specialist. We'll match you with the right products and services — and enrol you in our seasonal protection email series.</p>
+          <h2>
+  {route === "insurance_referral_priority" && "Protect Your Home — Coverage May Be At Risk"}
+  {route === "mitigation_roi_flow" && "Reduce Your Risk and Control Rising Premiums"}
+  {route === "coverage_recovery_priority" && "Restore and Protect Your Coverage Options"}
+  {route === "claim_history_priority" && "Strengthen Your Protection After Past Flooding"}
+  {route === "standard_followup" && `Ready to Protect Your Home, ${form.firstName}?`}
+</h2>
+  <p>
+  Based on your property risk profile, we’ll help you identify the most effective next steps for your home, finances, and long-term protection.
+</p>
                {!leadDone ? (
   <div className="lform">
     <div className="lrow">
@@ -1501,8 +1670,12 @@ const handleShare = async platform => {
     </div>
 
     <button className="btn-lead" onClick={handleLeadSubmit}>
-      GET MY PERSONALIZED PLAN →
-    </button>
+  {route === "insurance_referral_priority" && "CHECK COVERAGE OPTIONS →"}
+  {route === "mitigation_roi_flow" && "SEE HOW TO LOWER MY RISK →"}
+  {route === "coverage_recovery_priority" && "GET COVERAGE GUIDANCE →"}
+  {route === "claim_history_priority" && "REVIEW MY PROTECTION PLAN →"}
+  {route === "standard_followup" && "GET MY PERSONALIZED PLAN →"}
+</button>
 
     <div className="lprivacy">
       🔒 Your information is never sold. You can unsubscribe from emails at any time.
