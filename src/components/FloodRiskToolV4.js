@@ -399,7 +399,12 @@ function CostCalculator({ score }) {
       <div className="calc-sliders">
         <div className="slider-item">
           <div className="slider-label">
-            <span className="sl-name">Mitigation coverage level</span>
+          <div>
+  <span className="sl-name">Mitigation coverage level</span>
+  <div style={{ fontSize: 11, color: "var(--sub)", lineHeight: 1.4, marginTop: 2 }}>
+    Estimated level of mitigation investment you may consider
+  </div>
+</div>
             <span className="sl-val">{mitigPct}%</span>
           </div>
           <input type="range" min="10" max="95" value={mitigPct} style={sliderStyle(((mitigPct-10)/85)*100)}
@@ -410,8 +415,15 @@ function CostCalculator({ score }) {
             <span className="sl-name">Property value</span>
             <span className="sl-val">${propVal}k</span>
           </div>
-          <input type="range" min="100" max="1500" step="25" value={propVal} style={sliderStyle(((propVal-100)/1400)*100)}
-            onChange={e => setPropVal(Number(e.target.value))} />
+        <input
+  type="range"
+  min="350"
+  max="2000"
+  step="25"
+  value={propVal}
+  style={sliderStyle(((propVal - 350) / 1650) * 100)}
+  onChange={e => setPropVal(Number(e.target.value))}
+/>
         </div>
         <div className="slider-item">
           <div className="slider-label">
@@ -701,13 +713,16 @@ const totalFilled = fields0 + fields1 + fields2;
   if (!form.lastName.trim()) e.lastName = "Required";
   if (!form.email.trim() || !/\S+@\S+\.\S+/.test(form.email)) e.email = "Valid email required";
 }
-    if (step === 1) {
-      if (addrMode === "full") {
-        if (!form.addressLine.trim()) e.addressLine = "Required";
-        if (!form.zip.trim()) e.zip = "Required";
-      } else {
-        if (!form.zip.trim() || form.zip.trim().length < 5) e.zip = "Valid 5-digit ZIP required";
-      }
+  if (step === 1) {
+  if (addrMode === "full") {
+    if (!form.addressLine.trim()) e.addressLine = "Required";
+    if (!form.zip.trim()) e.zip = "Required";
+  } else {
+    if (!form.zip.trim() || form.zip.trim().length < 5) e.zip = "Valid 5-digit ZIP required";
+  }
+
+  if (!form.yearBuilt.trim()) e.yearBuilt = "Required";
+}
     }
     if (step === 2) {
   if (!form.treesOverhang) e.treesOverhang = "Required";
@@ -1200,10 +1215,19 @@ const text = `My home just scored ${score}/100 on the Property Risk Assessment â
                     </div>
                     <div className="odiv"><div className="oline"/><span className="olabel">Improves accuracy</span><div className="oline"/></div>
                     <div className="frow">
-                      <div className="fld">
-                        <label>Year Built</label>
-                        <input placeholder="e.g. 1988" value={form.yearBuilt} onChange={e=>set("yearBuilt",e.target.value)}/>
-                      </div>
+                    <div className="fld">
+  <label>Year Built <span className="req">*</span></label>
+  <input
+    placeholder="e.g. 1988"
+    value={form.yearBuilt}
+    className={errs.yearBuilt ? "err-field" : ""}
+    onChange={e => set("yearBuilt", e.target.value)}
+  />
+  <div style={{ fontSize: 12, color: "var(--sub)", lineHeight: 1.5 }}>
+    Guess if you don't know.
+  </div>
+  {errs.yearBuilt && <div className="err">{errs.yearBuilt}</div>}
+</div>
                       <div className="fld">
                         <label>Property Type</label>
                         <select value={form.propertyType} onChange={e=>set("propertyType",e.target.value)}>
@@ -1446,7 +1470,7 @@ const text = `My home just scored ${score}/100 on the Property Risk Assessment â
     </div>
     <div className="sec-body">
       <p style={{fontSize:13,color:"var(--sub)",lineHeight:1.7}}>
-        Based on your flood risk and current insurance status, you may benefit from immediate guidance on coverage options and mitigation steps.
+        Based on your flood risk and current insurance status, you may benefit from immediate guidance on coverage options and mitigation steps. Enter your phone number below to get personalized guidance.
       </p>
     </div>
   </div>
