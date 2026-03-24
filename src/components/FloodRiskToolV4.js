@@ -1268,15 +1268,18 @@ const text = `My home just scored ${score}/100 on the Property Risk Assessment �
                     <div className="fld">
                       <label>Do trees overhang your roof or gutters?</label>
                       <RadioGroup field="treesOverhang" options={["Yes","No","Not sure"]}/>
+                      {errs.treesOverhang && <div className="err">{errs.treesOverhang}</div>}
                       {form.treesOverhang === "Yes" && <div style={{fontSize:12,color:"var(--teal)",marginTop:4,fontWeight:600}}>🌳 Noted — blocked gutters are a leading cause of preventable water damage</div>}
                     </div>
                     <div className="fld">
                       <label>Has the property had flood or water damage before?</label>
                       <RadioGroup field="priorFloodDamage" options={["Yes","No","Not sure"]}/>
+                      {errs.priorFloodDamage && <div className="err">{errs.priorFloodDamage}</div>}
                     </div>
                     <div className="fld">
                       <label>Do you notice water pooling or drainage issues near the property?</label>
                       <RadioGroup field="drainageIssues" options={["Yes","No","Sometimes"]}/>
+                      {errs.drainageIssues && <div className="err">{errs.drainageIssues}</div>}
                     </div>
                     <div style={{marginTop:8}}>
   <div
@@ -1465,12 +1468,6 @@ const text = `My home just scored ${score}/100 on the Property Risk Assessment �
         <div className="ric clim">🛡️</div>
         <div className="rt"><strong>Insurance Risk:</strong> Review coverage status, premium trends, and mitigation steps that may strengthen insurability.</div>
       </div>
-    </div>
-  </div>
-</div>
-
-    <div className="fnarr">
-      We don’t just show flood risk. We show what that risk means for your property, your finances, and what to do next.
     </div>
   </div>
 </div>
