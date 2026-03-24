@@ -707,32 +707,39 @@ const totalFilled = fields0 + fields1 + fields2;
 
   // Validate current step
   const validateStep = step => {
-    const e = {};
+  const e = {};
+
   if (step === 0) {
-  if (!form.firstName.trim()) e.firstName = "Required";
-  if (!form.lastName.trim()) e.lastName = "Required";
-  if (!form.email.trim() || !/\S+@\S+\.\S+/.test(form.email)) e.email = "Valid email required";
-}
-  if (step === 1) {
-  if (addrMode === "full") {
-    if (!form.addressLine.trim()) e.addressLine = "Required";
-    if (!form.zip.trim()) e.zip = "Required";
-  } else {
-    if (!form.zip.trim() || form.zip.trim().length < 5) e.zip = "Valid 5-digit ZIP required";
+    if (!form.firstName.trim()) e.firstName = "Required";
+    if (!form.lastName.trim()) e.lastName = "Required";
+    if (!form.email.trim() || !/\S+@\S+\.\S+/.test(form.email)) {
+      e.email = "Valid email required";
+    }
   }
 
-  if (!form.yearBuilt.trim()) e.yearBuilt = "Required";
-}
+  if (step === 1) {
+    if (addrMode === "full") {
+      if (!form.addressLine.trim()) e.addressLine = "Required";
+      if (!form.zip.trim()) e.zip = "Required";
+    } else {
+      if (!form.zip.trim() || form.zip.trim().length < 5) {
+        e.zip = "Valid 5-digit ZIP required";
+      }
     }
-    if (step === 2) {
-  if (!form.treesOverhang) e.treesOverhang = "Required";
-  if (!form.priorFloodDamage) e.priorFloodDamage = "Required";
-  if (!form.drainageIssues) e.drainageIssues = "Required";
-  if (!form.floodInsurance) e.floodInsurance = "Required";
-}
-    setErrs(e);
-    return Object.keys(e).length === 0;
-  };
+
+    if (!form.yearBuilt.trim()) e.yearBuilt = "Required";
+  }
+
+  if (step === 2) {
+    if (!form.treesOverhang) e.treesOverhang = "Required";
+    if (!form.priorFloodDamage) e.priorFloodDamage = "Required";
+    if (!form.drainageIssues) e.drainageIssues = "Required";
+    if (!form.floodInsurance) e.floodInsurance = "Required";
+  }
+
+  setErrs(e);
+  return Object.keys(e).length === 0;
+};
 
   const nextStep = () => {
   if (validateStep(formStep)) {
@@ -1432,6 +1439,12 @@ const text = `My home just scored ${score}/100 on the Property Risk Assessment â
         <div className="fnote">Combined view of physical, property, and financial exposure</div>
       </div>
     </div>
+
+    <div className="fnarr">
+      We donâ€™t just show flood risk. We show what that risk means for your property, your finances, and what to do next.
+    </div>
+  </div>
+</div>
 
 <div className="sec">
   <div className="sec-hd">
