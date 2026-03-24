@@ -417,11 +417,11 @@ function CostCalculator({ score }) {
           </div>
         <input
   type="range"
-  min="350"
+  min="200"
   max="2000"
   step="25"
   value={propVal}
-  style={sliderStyle(((propVal - 350) / 1650) * 100)}
+  style={sliderStyle(((propVal - 200) / 1800) * 100)}
   onChange={e => setPropVal(Number(e.target.value))}
 />
         </div>
