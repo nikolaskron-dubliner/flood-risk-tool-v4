@@ -63,11 +63,10 @@ export default async function handler(req, res) {
       source: source || 'guide_download'
     }
 
-    const { data, error } = await supabase
-      .schema('leads')
-      .from('guide_downloads')
-      .insert([insertPayload])
-      .select()
+const { data, error } = await supabase
+  .from('guide_downloads')
+  .insert([insertPayload])
+  .select()
 
     if (error) {
       console.error('Supabase insert error:', error)

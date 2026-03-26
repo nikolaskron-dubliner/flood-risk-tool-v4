@@ -48,11 +48,10 @@ export default async function handler(req, res) {
     }
 
     const { data, error } = await supabase
-      .schema('leads')
-      .from('guide_downloads')
-      .update(updatePayload)
-      .eq('email', normalizedEmail)
-      .select()
+  .from('guide_downloads')
+  .update(updatePayload)
+  .eq('email', normalizedEmail)
+  .select()
 
     if (error) throw error
 
