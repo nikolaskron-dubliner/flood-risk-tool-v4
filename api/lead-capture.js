@@ -69,7 +69,16 @@ export default async function handler(req, res) {
       .insert([insertPayload])
       .select()
 
-    if (error) throw error
+    if (error) {
+      console.error('Supabase insert error:', error)
+      return res.status(500).json({
+        error: 'Supabase insert failed',
+        message: error.message || null,
+        details: error.details || null,
+        hint: error.hint || null,
+        code: error.code || null
+      })
+    }
 
     return res.status(200).json({
       success: true,
@@ -77,7 +86,10 @@ export default async function handler(req, res) {
       data
     })
   } catch (err) {
-    console.error('lead-capture error:', err)
-    return res.status(500).json({ error: 'Server error' })
+    console.error('lead-capture error full:', err)
+    return res.status(500).json({
+      error: 'Server error',
+      message: err.message || null
+    })
   }
 }
