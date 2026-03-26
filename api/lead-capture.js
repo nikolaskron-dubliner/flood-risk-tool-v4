@@ -7,11 +7,16 @@ const supabase = createClient(
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', 'https://oiriunu.com')
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Max-Age', '86400')
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end()
+  }
+
+  if (req.method === 'GET') {
+    return res.status(200).json({ ok: true, route: 'lead-capture' })
   }
 
   if (req.method !== 'POST') {
@@ -64,9 +69,7 @@ export default async function handler(req, res) {
       .insert([insertPayload])
       .select()
 
-    if (error) {
-      throw error
-    }
+    if (error) throw error
 
     return res.status(200).json({
       success: true,
@@ -75,8 +78,6 @@ export default async function handler(req, res) {
     })
   } catch (err) {
     console.error('lead-capture error:', err)
-    return res.status(500).json({
-      error: 'Server error'
-    })
+    return res.status(500).json({ error: 'Server error' })
   }
 }

@@ -7,11 +7,16 @@ const supabase = createClient(
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', 'https://oiriunu.com')
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Max-Age', '86400')
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end()
+  }
+
+  if (req.method === 'GET') {
+    return res.status(200).json({ ok: true, route: 'lead-capture-enrich' })
   }
 
   if (req.method !== 'POST') {
@@ -49,14 +54,10 @@ export default async function handler(req, res) {
       .eq('email', normalizedEmail)
       .select()
 
-    if (error) {
-      throw error
-    }
+    if (error) throw error
 
     if (!data || data.length === 0) {
-      return res.status(404).json({
-        error: 'No matching lead found for this email'
-      })
+      return res.status(404).json({ error: 'No matching lead found for this email' })
     }
 
     return res.status(200).json({
@@ -66,8 +67,6 @@ export default async function handler(req, res) {
     })
   } catch (err) {
     console.error('lead-capture-enrich error:', err)
-    return res.status(500).json({
-      error: 'Server error'
-    })
+    return res.status(500).json({ error: 'Server error' })
   }
 }
