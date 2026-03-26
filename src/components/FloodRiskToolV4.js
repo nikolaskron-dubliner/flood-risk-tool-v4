@@ -1,10 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 
 const FLOOD_REPORT_API_URL = "/api/flood-risk-report";
-
-// ─── CONFIG ───────────────────────────────────────────────────────────────────
-const SMARTY_AUTH_ID = process.env.REACT_APP_SMARTY_AUTH_ID || "";
-const SMARTY_AUTH_TOKEN = process.env.REACT_APP_SMARTY_AUTH_TOKEN || "";
 
 // ─── SEASONAL URGENCY ────────────────────────────────────────────────────────
 function getSeasonalAlert() {
@@ -351,28 +347,27 @@ const LOAD_STEPS = [
 
 const FORM_STEPS = ["Your Details","Property Info","Property Condition"];
 
-// ─── ADDRESS VALIDATION ───────────────────────────────────────────────────────
-async function validateAddress(street, city, state, zip) {
+// ─── ZIP LOOKUP (free, no key needed) ────────────────────────────────────────
+async function lookupZip(zip) {
   try {
-    const q = new URLSearchParams({ street, city, state, zipcode: zip, "auth-id": SMARTY_AUTH_ID, "auth-token": SMARTY_AUTH_TOKEN });
-    const res = await fetch(`https://us-street.api.smartystreets.com/street-address?${q}`);
+    const res = await fetch(`https://api.zippopotam.us/us/${zip}`);
+    if (!res.ok) return { valid: false };
     const data = await res.json();
-    if (Array.isArray(data) && data.length > 0) {
-      const c = data[0].components, md = data[0].metadata;
-      return { valid: true, standardized: data[0].delivery_line_1 + ", " + data[0].last_line, zip5: c.zipcode, city: c.city_name, state: c.state_abbreviation, lat: md.latitude, lng: md.longitude };
-    }
-    return { valid: false };
-  } catch { return { valid: true, standardized: `${street}, ${city}, ${state} ${zip}`, zip5: zip }; }
+    return {
+      valid: true,
+      city: data.places[0]["place name"],
+      state: data.places[0]["state abbreviation"]
+    };
+  } catch { return { valid: false }; }
 }
 
-async function validateByZip(zip) {
+async function lookupCounty(zip) {
   try {
-    const q = new URLSearchParams({ zipcode: zip, "auth-id": SMARTY_AUTH_ID, "auth-token": SMARTY_AUTH_TOKEN });
-    const res = await fetch(`https://us-zipcode.api.smartystreets.com/lookup?${q}`);
+    const res = await fetch(`https://geo.fcc.gov/api/census/block/find?zip=${zip}&format=json`);
+    if (!res.ok) return null;
     const data = await res.json();
-    if (Array.isArray(data) && data[0]?.cities?.length) return { valid: true, city: data[0].cities[0].city, state: data[0].cities[0].state_abbreviation };
-    return { valid: false };
-  } catch { return { valid: true, city: "your area", state: "" }; }
+    return data?.County?.name || null;
+  } catch { return null; }
 }
 
 // ─── CALCULATOR COMPONENT ────────────────────────────────────────────────────
@@ -631,6 +626,7 @@ function getOverallPropertyRiskScore(floodExposure, propertyVulnerability, insur
     insuranceRisk * 0.20
   );
 }
+
 export default function FloodRiskApp() {
   const seasonalAlert = getSeasonalAlert();
 
@@ -695,15 +691,6 @@ const [form, setForm] = useState({
 const totalFields = 3 + 4 + 7;
 const totalFilled = fields0 + fields1 + fields2;
   const progressPct = Math.round((totalFilled / totalFields) * 100);
-
-  // Address check
-  const checkAddress = useCallback(async () => {
-    if (!form.addressLine || !form.zip) return;
-    setAddrStatus("checking");
-    const res = await validateAddress(form.addressLine, form.city, form.state, form.zip);
-    if (res.valid) { setAddrStatus("ok"); setAddrVerified(res); }
-    else { setAddrStatus("bad"); setAddrVerified(null); }
-  }, [form.addressLine, form.city, form.state, form.zip]);
 
   // Validate current step
   const validateStep = step => {
@@ -782,13 +769,17 @@ trackEvent("flood_assessment_submit_started", {
   let zipState = addrVerified?.state || form.state;
 
   if (addrMode === "zip") {
-    const zRes = await validateByZip(form.zip);
-    if (zRes.valid) {
-      zipCity = zRes.city;
-      zipState = zRes.state;
-    }
-    location = `${zipCity}, ${zipState} ${form.zip}`;
+  const zRes = await lookupZip(form.zip);
+  if (zRes.valid) {
+    zipCity = zRes.city;
+    zipState = zRes.state;
   }
+  location = `${zipCity}, ${zipState} ${form.zip}`;
+}
+
+// Auto-detect county from zip
+const county = await lookupCounty(form.zip);
+if (county) location = `${zipCity}, ${county} County, ${zipState} ${form.zip}`;
 
   const [aiRes] = await Promise.all([
     (async () => {
@@ -1197,15 +1188,15 @@ const text = `My home just scored ${score}/100 on the Property Risk Assessment �
                       <>
                         <div className="fld">
                           <label>Street Address <span className="req">*</span></label>
-                          <input placeholder="123 Main Street" value={form.addressLine} className={errs.addressLine?"err-field":""} onChange={e=>set("addressLine",e.target.value)} onBlur={checkAddress}/>
+                          <input placeholder="123 Main Street" value={form.addressLine} className={errs.addressLine?"err-field":""} onChange={e=>set("addressLine",e.target.value)} />
                           {addrStatus==="checking" && <div className="addr-status addr-chk">🔍 Verifying with USPS…</div>}
                           {addrStatus==="ok" && <div className="addr-status addr-ok">✓ Verified: {addrVerified?.standardized}</div>}
                           {addrStatus==="bad" && <div className="addr-status addr-bad">⚠ Not found. <button onClick={()=>{setAddrMode("zip");setAddrStatus(null);}} style={{background:"none",border:"none",color:"#0068a0",cursor:"pointer",fontWeight:700,textDecoration:"underline",fontSize:"12px",padding:0}}>Use ZIP only →</button></div>}
                           {errs.addressLine && <div className="err">{errs.addressLine}</div>}
                         </div>
                         <div className="frow">
-                          <div className="fld"><label>City</label><input placeholder="Springfield" value={form.city} onChange={e=>set("city",e.target.value)} onBlur={checkAddress}/></div>
-                          <div className="fld"><label>State</label><input placeholder="IL" maxLength={2} value={form.state} onChange={e=>set("state",e.target.value.toUpperCase())} onBlur={checkAddress}/></div>
+                          <div className="fld"><label>City</label><input placeholder="Springfield" value={form.city} onChange={e=>set("city",e.target.value)}/></div>
+                          <div className="fld"><label>State</label><input placeholder="IL" maxLength={2} value={form.state} onChange={e=>set("state",e.target.value.toUpperCase())} /></div>
                         </div>
                       </>
                     ) : (
@@ -1217,7 +1208,7 @@ const text = `My home just scored ${score}/100 on the Property Risk Assessment �
                     )}
                     <div className="fld">
                       <label>ZIP Code <span className="req">*</span></label>
-                      <input placeholder="62701" maxLength={5} value={form.zip} className={errs.zip?"err-field":""} onChange={e=>set("zip",e.target.value)} onBlur={checkAddress}/>
+                      <input placeholder="62701" maxLength={5} value={form.zip} className={errs.zip?"err-field":""} onChange={e=>set("zip",e.target.value)} />
                       {errs.zip && <div className="err">{errs.zip}</div>}
                     </div>
                     <div className="odiv"><div className="oline"/><span className="olabel">Improves accuracy</span><div className="oline"/></div>
