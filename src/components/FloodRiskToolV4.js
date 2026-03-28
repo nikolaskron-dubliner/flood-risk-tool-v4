@@ -1,6 +1,21 @@
 import { useState } from "react";
 
 const FLOOD_REPORT_API_URL = "/api/flood-risk-report";
+const LEAD_UPSERT_API_URL = "/api/lead/upsert";
+
+function getStoredLeadId() {
+  try {
+    return localStorage.getItem("lead_id");
+  } catch {
+    return null;
+  }
+}
+
+function setStoredLeadId(id) {
+  try {
+    if (id) localStorage.setItem("lead_id", id);
+  } catch {}
+}
 
 // ─── SEASONAL URGENCY ────────────────────────────────────────────────────────
 function getSeasonalAlert() {
@@ -845,19 +860,21 @@ setLead({
   interest: "Full Professional Assessment"
 });
 
+  const leadId = getStoredLeadId();
+
   const payload = {
-    requirePhone: false,
-    firstName: form.firstName,
-    lastName: form.lastName,
+    id: leadId,
+    first_name: form.firstName,
+    last_name: form.lastName,
+    full_name: `${form.firstName} ${form.lastName}`.trim(),
     email: form.email,
-    streetAddress: form.addressLine || "",
+    street_address: form.addressLine || "",
     city: zipCity || form.city || "",
     state: zipState || form.state || "",
-    zipCode: form.zip || "",
-    yearBuilt: form.yearBuilt,
-    fullName: `${form.firstName} ${form.lastName}`,
-    propertyType: form.propertyType,
-    basementType:
+    zip_code: form.zip || "",
+    year_built: form.yearBuilt ? Number(form.yearBuilt) : null,
+    property_type: form.propertyType || "",
+    basement_type:
       form.basement === "Yes — Full finished basement"
         ? "Yes – Full finished basement"
         : form.basement === "Yes — Unfinished basement"
@@ -865,17 +882,14 @@ setLead({
         : form.basement === "Yes — Partial / crawlspace"
         ? "Yes- Partial / crawlspace"
         : form.basement,
-    treesOverhang: form.treesOverhang,
-    priorFloodDamage: form.priorFloodDamage,
-    drainageIssues: form.drainageIssues,
-    floodInsurance: form.floodInsurance,
-    priorFloodClaim: form.priorFloodClaim,
-    premiumIncrease: form.premiumIncrease,
-    deniedOrDropped: form.deniedOrDropped,
-    leadRoute,
-    interestArea: form.interest ? [form.interest] : ["General Information"],
-    riskScore: overallRiskScore ?? null,
-    assessmentAnswers: {
+    trees_overhang: form.treesOverhang,
+    prior_flood_damage: form.priorFloodDamage,
+    drainage_issues: form.drainageIssues,
+    interest_area: form.interest || "General Information",
+    risk_score: overallRiskScore ?? null,
+    stage: "completed",
+    callback_requested: false,
+    assessment_answers: {
       addrMode,
       location,
       addressLine: form.addressLine || "",
@@ -897,17 +911,17 @@ setLead({
       locationLabel: aiRes?.locationLabel || location,
       reportSummary: aiRes?.financial?.narrative || ""
     },
-    utm: {
-      source: new URLSearchParams(window.location.search).get("utm_source"),
-      medium: new URLSearchParams(window.location.search).get("utm_medium"),
-      campaign: new URLSearchParams(window.location.search).get("utm_campaign"),
-      term: new URLSearchParams(window.location.search).get("utm_term"),
-      content: new URLSearchParams(window.location.search).get("utm_content")
-    }
+    utm_source: new URLSearchParams(window.location.search).get("utm_source"),
+    utm_medium: new URLSearchParams(window.location.search).get("utm_medium"),
+    utm_campaign: new URLSearchParams(window.location.search).get("utm_campaign"),
+    utm_term: new URLSearchParams(window.location.search).get("utm_term"),
+    utm_content: new URLSearchParams(window.location.search).get("utm_content"),
+    referrer: document.referrer || "",
+    landing_page: window.location.href
   };
 
   try {
-    const response = await fetch("/api/assessment-submit", {
+    const response = await fetch(LEAD_UPSERT_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -921,7 +935,11 @@ setLead({
       throw new Error(submitResult.error || "Submission failed");
     }
 
-    console.log("Assessment submit success:", submitResult);
+    if (submitResult?.id) {
+      setStoredLeadId(submitResult.id);
+    }
+
+    console.log("Lead upsert success:", submitResult);
     trackEvent("property_risk_result_viewed", {
   score: overallRiskScore ?? null,
   tier: aiRes?.tier || "",
@@ -952,19 +970,22 @@ trackEvent("flood_insurance_profile_captured", {
 
   const parts = lead.name.trim().split(" ");
 
+    const leadId = getStoredLeadId();
+
   const payload = {
-    firstName: parts[0] || form.firstName,
-    lastName: parts.slice(1).join(" ") || form.lastName,
+    id: leadId,
+    first_name: parts[0] || form.firstName,
+    last_name: parts.slice(1).join(" ") || form.lastName,
+    full_name: lead.name,
     email: form.email,
     phone: lead.phone,
-    streetAddress: form.addressLine || "",
+    street_address: form.addressLine || "",
     city: form.city || "",
     state: form.state || "",
-    zipCode: form.zip || "",
-    yearBuilt: form.yearBuilt,
-    fullName: lead.name,
-    propertyType: form.propertyType,
-    basementType:
+    zip_code: form.zip || "",
+    year_built: form.yearBuilt ? Number(form.yearBuilt) : null,
+    property_type: form.propertyType || "",
+    basement_type:
       form.basement === "Yes — Full finished basement"
         ? "Yes – Full finished basement"
         : form.basement === "Yes — Unfinished basement"
@@ -972,29 +993,26 @@ trackEvent("flood_insurance_profile_captured", {
         : form.basement === "Yes — Partial / crawlspace"
         ? "Yes- Partial / crawlspace"
         : form.basement,
-    treesOverhang: form.treesOverhang,
-    priorFloodDamage: form.priorFloodDamage,
-    drainageIssues: form.drainageIssues,
-    floodInsurance: form.floodInsurance,
-    priorFloodClaim: form.priorFloodClaim,
-    premiumIncrease: form.premiumIncrease,
-    deniedOrDropped: form.deniedOrDropped,
-    leadRoute: result?.leadRoute || "standard_followup",
-    interestArea: lead.interest ? [lead.interest] : ["General Information"],
-    riskScore: result?.score ?? null,
-    assessmentAnswers: {
-  source: "lead_followup",
-  location: result?.location || "",
-  floodInsurance: form.floodInsurance,
-  priorFloodClaim: form.priorFloodClaim,
-  premiumIncrease: form.premiumIncrease,
-  deniedOrDropped: form.deniedOrDropped,
-  leadRoute: result?.leadRoute || "standard_followup"
-}
+    trees_overhang: form.treesOverhang,
+    prior_flood_damage: form.priorFloodDamage,
+    drainage_issues: form.drainageIssues,
+    interest_area: lead.interest || "General Information",
+    risk_score: result?.score ?? null,
+    stage: "callback_requested",
+    callback_requested: true,
+    assessment_answers: {
+      source: "lead_followup",
+      location: result?.location || "",
+      floodInsurance: form.floodInsurance,
+      priorFloodClaim: form.priorFloodClaim,
+      premiumIncrease: form.premiumIncrease,
+      deniedOrDropped: form.deniedOrDropped,
+      leadRoute: result?.leadRoute || "standard_followup"
+    }
   };
 
   try {
-    const response = await fetch("/api/assessment-submit", {
+    const response = await fetch(LEAD_UPSERT_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -1004,9 +1022,13 @@ trackEvent("flood_insurance_profile_captured", {
 
     const submitResult = await response.json();
 
-if (!response.ok) {
-  throw new Error(submitResult.error || "Lead submission failed");
-}
+    if (!response.ok) {
+      throw new Error(submitResult.error || "Lead submission failed");
+    }
+
+    if (submitResult?.id) {
+      setStoredLeadId(submitResult.id);
+    }
 
 setLeadDone(true);
 trackEvent("property_risk_lead_submitted", {
@@ -1063,7 +1085,22 @@ const text = `My home just scored ${score}/100 on the Property Risk Assessment �
   }
 };
 
-  const reset = () => { setPhase("form"); setResult(null); setBarW(0); setAddrStatus(null); setAddrVerified(null); setAddrMode("full"); setLead({name:"",phone:"",interest:"Full Professional Assessment"}); setLeadDone(false); setErrs({}); setFormStep(0); };
+  const reset = () => {
+    try {
+      localStorage.removeItem("lead_id");
+    } catch {}
+
+    setPhase("form");
+    setResult(null);
+    setBarW(0);
+    setAddrStatus(null);
+    setAddrVerified(null);
+    setAddrMode("full");
+    setLead({ name:"", phone:"", interest:"Full Professional Assessment" });
+    setLeadDone(false);
+    setErrs({});
+    setFormStep(0);
+  };
 
   const tc = result ? tierCls(result.score) : "";
   const hasBasement = form.basement && form.basement !== "No basement";

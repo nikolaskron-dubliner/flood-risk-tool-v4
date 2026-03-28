@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import twilio from "twilio";
+import { Resend } from "resend";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -7,16 +7,9 @@ const supabase = createClient(
   { auth: { persistSession: false } }
 );
 
-const twilioClient =
-  process.env.TWILIO_ACCOUNT_SID &&
-  process.env.TWILIO_AUTH_TOKEN &&
-  process.env.TWILIO_FROM_NUMBER &&
-  process.env.ALERT_TO_NUMBER
-    ? twilio(
-        process.env.TWILIO_ACCOUNT_SID,
-        process.env.TWILIO_AUTH_TOKEN
-      )
-    : null;
+const resend = process.env.RESEND_API_KEY
+  ? new Resend(process.env.RESEND_API_KEY)
+  : null;
 
 const ALLOWED_STAGES = new Set([
   "partial",
@@ -26,6 +19,11 @@ const ALLOWED_STAGES = new Set([
   "qualified",
   "closed",
 ]);
+
+const HUBSPOT_SYNC_ENABLED = process.env.HUBSPOT_SYNC_ENABLED === "true";
+const QUALIFIED_RISK_SCORE = Number(process.env.QUALIFIED_RISK_SCORE || 70);
+const HIGH_PRIORITY_SCORE = Number(process.env.HIGH_PRIORITY_SCORE || 90);
+const NUDGE_ENROLL_HOURS = Number(process.env.NUDGE_ENROLL_HOURS || 1);
 
 function cleanText(value) {
   if (value === undefined || value === null) return null;
@@ -39,9 +37,19 @@ function cleanNumeric(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+function cleanBoolean(value) {
+  if (value === true || value === false) return value;
+  if (value === undefined || value === null || value === "") return null;
+
+  const normalized = String(value).trim().toLowerCase();
+  if (["true", "yes", "y", "1"].includes(normalized)) return true;
+  if (["false", "no", "n", "0"].includes(normalized)) return false;
+
+  return null;
+}
+
 function cleanJson(value) {
-  if (value && typeof value === "object") return value;
-  return {};
+  return value && typeof value === "object" ? value : {};
 }
 
 function normalizeStage(value) {
@@ -57,52 +65,244 @@ function mergeDefined(existing, incoming) {
   return out;
 }
 
-function buildSmsBody(row) {
+function buildFullName(firstName, lastName, fullName) {
+  if (fullName) return fullName;
+  const joined = [firstName, lastName].filter(Boolean).join(" ").trim();
+  return joined || null;
+}
+
+function inferCallbackRequested(body, incomingStage, existingRow = null) {
+  const explicit =
+    cleanBoolean(body.callback_requested) ??
+    cleanBoolean(body.flood_follow_up_requested);
+
+  if (explicit !== null) return explicit;
+  if (incomingStage === "callback_requested") return true;
+  if (existingRow?.callback_requested === true) return true;
+
+  return false;
+}
+
+function normalizeStageWithCallback(stage, callbackRequested) {
+  if (callbackRequested) return "callback_requested";
+  if (stage === "callback_requested") return "completed";
+  return stage;
+}
+
+function classifyLead(row) {
+  const riskScore = Number(row.risk_score || 0);
+  const callbackRequested = row.callback_requested === true;
+
+  if (callbackRequested) return "high";
+  if (Number(row.priority || 0) >= HIGH_PRIORITY_SCORE) return "high";
+  if (riskScore >= QUALIFIED_RISK_SCORE) return "medium";
+  return "low";
+}
+
+function shouldSyncToHubSpot(row) {
+  const riskScore = Number(row.risk_score || 0);
+
+  return (
+    row.callback_requested === true ||
+    row.stage === "completed" && riskScore >= QUALIFIED_RISK_SCORE ||
+    row.stage === "qualified"
+  );
+}
+
+function shouldEnrollInNurture(row) {
+  if (!row.email) return false;
+  if (row.callback_requested === true) return false;
+  if (row.stage === "qualified" || row.stage === "closed") return false;
+  if (row.nurture_status && row.nurture_status !== "not_enrolled") return false;
+  return row.lead_temperature === "low" || row.lead_temperature === "medium";
+}
+
+function mapStageToHubSpot(row) {
+  if (row.callback_requested === true) return "Callback Requested";
+  if (row.stage === "completed") return "Completed";
+  if (row.stage === "qualified") return "Qualified";
+  if (row.stage === "contacted") return "Contacted";
+  if (row.stage === "closed") return "Customer";
+  return "Partial";
+}
+
+function buildInternalAlertSubject(row) {
+  const cityState = [row.city, row.state].filter(Boolean).join(", ");
+  const score = row.risk_score ?? "n/a";
+  return `Callback Requested | ${cityState || "Unknown Location"} | Risk Score ${score}`;
+}
+
+function buildInternalAlertHtml(row) {
   const name =
     row.full_name ||
     [row.first_name, row.last_name].filter(Boolean).join(" ") ||
     "Unknown";
-  const location = [row.city, row.state, row.zip_code].filter(Boolean).join(", ");
-  const riskScore =
-    row.risk_score !== null && row.risk_score !== undefined
-      ? row.risk_score
-      : "n/a";
 
-  return [
-    "Flood Lead Callback Request",
-    `Name: ${name}`,
-    `Risk Score: ${riskScore}`,
-    row.phone ? `Phone: ${row.phone}` : null,
-    row.email ? `Email: ${row.email}` : null,
-    row.street_address ? `Address: ${row.street_address}` : null,
-    location ? `Location: ${location}` : null,
-    row.interest_area ? `Interest: ${row.interest_area}` : null,
-    `Stage: ${row.stage}`,
-    `Priority: ${row.priority}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  return `
+    <h2>High-Priority Flood Lead</h2>
+    <p>A lead requested a callback.</p>
+    <table cellpadding="6" cellspacing="0" border="1" style="border-collapse: collapse;">
+      <tr><td><strong>Name</strong></td><td>${escapeHtml(name)}</td></tr>
+      <tr><td><strong>Email</strong></td><td>${escapeHtml(row.email || "")}</td></tr>
+      <tr><td><strong>Phone</strong></td><td>${escapeHtml(row.phone || "")}</td></tr>
+      <tr><td><strong>Address</strong></td><td>${escapeHtml(row.street_address || "")}</td></tr>
+      <tr><td><strong>City</strong></td><td>${escapeHtml(row.city || "")}</td></tr>
+      <tr><td><strong>State</strong></td><td>${escapeHtml(row.state || "")}</td></tr>
+      <tr><td><strong>ZIP</strong></td><td>${escapeHtml(row.zip_code || "")}</td></tr>
+      <tr><td><strong>Risk Score</strong></td><td>${escapeHtml(String(row.risk_score ?? ""))}</td></tr>
+      <tr><td><strong>Priority</strong></td><td>${escapeHtml(String(row.priority ?? ""))}</td></tr>
+      <tr><td><strong>Stage</strong></td><td>${escapeHtml(row.stage || "")}</td></tr>
+      <tr><td><strong>Property Type</strong></td><td>${escapeHtml(row.property_type || "")}</td></tr>
+      <tr><td><strong>Prior Flood Damage</strong></td><td>${escapeHtml(row.prior_flood_damage || "")}</td></tr>
+      <tr><td><strong>Drainage Issues</strong></td><td>${escapeHtml(row.drainage_issues || "")}</td></tr>
+      <tr><td><strong>Interest Area</strong></td><td>${escapeHtml(row.interest_area || "")}</td></tr>
+    </table>
+  `;
 }
 
-async function sendAlertSms(row) {
-  if (!twilioClient) {
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+async function sendInternalAlertEmail(row) {
+  if (!resend) {
     return {
       sent: false,
       skipped: true,
-      reason: "Twilio env vars not fully configured.",
+      reason: "Resend is not configured.",
     };
   }
 
-  const message = await twilioClient.messages.create({
-    body: buildSmsBody(row),
-    from: process.env.TWILIO_FROM_NUMBER,
-    to: process.env.ALERT_TO_NUMBER,
+  const result = await resend.emails.send({
+    from: process.env.ALERT_FROM_EMAIL,
+    to: process.env.ALERT_TO_EMAIL,
+    subject: buildInternalAlertSubject(row),
+    html: buildInternalAlertHtml(row),
   });
 
   return {
     sent: true,
-    sid: message.sid,
+    id: result?.data?.id || null,
   };
+}
+
+async function syncHubSpotContact(row) {
+  if (!HUBSPOT_SYNC_ENABLED || !process.env.HUBSPOT_PRIVATE_TOKEN) {
+    return {
+      synced: false,
+      skipped: true,
+      reason: "HubSpot sync disabled or token missing.",
+    };
+  }
+
+  const properties = {
+    email: row.email || "",
+    firstname: row.first_name || "",
+    lastname: row.last_name || "",
+    phone: row.phone || "",
+    address: row.street_address || "",
+    city: row.city || "",
+    state: row.state || "",
+    zip: row.zip_code || "",
+    risk_score: row.risk_score != null ? String(row.risk_score) : "",
+    customer_funnel_stage: mapStageToHubSpot(row),
+    flood_follow_up_requested: row.callback_requested ? "Yes" : "No",
+    property_type: row.property_type || "",
+    prior_flood_damage: row.prior_flood_damage || "",
+    drainage_issues: row.drainage_issues || "",
+    interest_area: row.interest_area || "",
+  };
+
+  const response = await fetch(
+    "https://api.hubapi.com/crm/v3/objects/contacts",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.HUBSPOT_PRIVATE_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        properties,
+      }),
+    }
+  );
+
+  if (response.ok) {
+    const data = await response.json();
+    return {
+      synced: true,
+      contactId: data.id,
+      mode: "created",
+    };
+  }
+
+  const errorBody = await response.text();
+
+  // If contact already exists, update by email via search + patch.
+  if (response.status === 409 || errorBody.toLowerCase().includes("already exists")) {
+    const searchResponse = await fetch(
+      "https://api.hubapi.com/crm/v3/objects/contacts/search",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.HUBSPOT_PRIVATE_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          filterGroups: [
+            {
+              filters: [
+                {
+                  propertyName: "email",
+                  operator: "EQ",
+                  value: row.email,
+                },
+              ],
+            },
+          ],
+          properties: ["email"],
+          limit: 1,
+        }),
+      }
+    );
+
+    const searchData = await searchResponse.json();
+    const existingId = searchData?.results?.[0]?.id;
+
+    if (!existingId) {
+      throw new Error(`HubSpot search failed after conflict: ${errorBody}`);
+    }
+
+    const updateResponse = await fetch(
+      `https://api.hubapi.com/crm/v3/objects/contacts/${existingId}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${process.env.HUBSPOT_PRIVATE_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ properties }),
+      }
+    );
+
+    if (!updateResponse.ok) {
+      const updateBody = await updateResponse.text();
+      throw new Error(`HubSpot update failed: ${updateBody}`);
+    }
+
+    return {
+      synced: true,
+      contactId: existingId,
+      mode: "updated",
+    };
+  }
+
+  throw new Error(`HubSpot create failed: ${errorBody}`);
 }
 
 async function findExistingLead({ id, email, street_address, phone }) {
@@ -151,7 +351,9 @@ export default async function handler(req, res) {
     const body =
       typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
 
-    const incoming = {
+    const proposedStage = normalizeStage(body.stage);
+
+    const incomingBase = {
       id: cleanText(body.id),
       first_name: cleanText(body.first_name),
       last_name: cleanText(body.last_name),
@@ -178,68 +380,82 @@ export default async function handler(req, res) {
       utm_content: cleanText(body.utm_content),
       referrer: cleanText(body.referrer),
       landing_page: cleanText(body.landing_page),
-      source_app: cleanText(body.source_app) || "risk_assessment_tool",
       raw_payload:
         body.raw_payload && typeof body.raw_payload === "object"
           ? body.raw_payload
           : body,
-      stage: normalizeStage(body.stage),
     };
 
-    if (!incoming.email) {
-      return res.status(400).json({ error: "email is required" });
+    if (!incomingBase.email) {
+      return res.status(400).json({ ok: false, error: "email is required" });
     }
 
     const existing = await findExistingLead({
-      id: incoming.id,
-      email: incoming.email,
-      street_address: incoming.street_address,
-      phone: incoming.phone,
+      id: incomingBase.id,
+      email: incomingBase.email,
+      street_address: incomingBase.street_address,
+      phone: incomingBase.phone,
     });
 
+    const callbackRequested = inferCallbackRequested(body, proposedStage, existing);
+    const normalizedStage = normalizeStageWithCallback(proposedStage, callbackRequested);
+    const fullName = buildFullName(
+      incomingBase.first_name ?? existing?.first_name ?? null,
+      incomingBase.last_name ?? existing?.last_name ?? null,
+      incomingBase.full_name ?? existing?.full_name ?? null
+    );
+
+    const incoming = {
+      ...incomingBase,
+      full_name: fullName,
+      stage: normalizedStage,
+      callback_requested: callbackRequested,
+    };
+
     let recordToWrite;
-    let previousStage = null;
+    let previousStage = existing?.stage || null;
+    let previousCallbackRequested = existing?.callback_requested === true;
+    let previousInternalAlertSent = existing?.internal_alert_sent === true;
 
     if (existing) {
-      previousStage = existing.stage;
-
       recordToWrite = mergeDefined(existing, incoming);
 
-      // Preserve existing callback stage unless explicitly downgraded for a reason.
-      // This avoids accidentally overwriting a hot lead with a later partial payload.
       if (
         existing.stage === "callback_requested" &&
-        incoming.stage === "partial"
+        normalizedStage === "partial"
       ) {
         recordToWrite.stage = existing.stage;
       }
 
-      // Once SMS was sent, keep the flag unless you intentionally reset it later.
-      if (existing.sms_alert_sent === true) {
-        recordToWrite.sms_alert_sent = true;
-        recordToWrite.sms_alert_sent_at = existing.sms_alert_sent_at;
-        recordToWrite.last_notification_sent_at =
-          existing.last_notification_sent_at;
+      if (existing.callback_requested === true) {
+        recordToWrite.callback_requested = true;
+        recordToWrite.stage = "callback_requested";
       }
     } else {
       recordToWrite = {
         ...incoming,
-        sms_alert_sent: false,
-        sms_alert_sent_at: null,
-        last_notification_sent_at: null,
+        internal_alert_sent: false,
+        internal_alert_sent_at: null,
+        nurture_status: "not_enrolled",
+        nurture_step: 0,
+        nurture_next_send_at: null,
+        nurture_last_sent_at: null,
+        hubspot_sync_status: "pending",
+        hubspot_sync_error: null,
+        email_status: "pending",
+        email_error: null,
       };
     }
 
-    // Do not let clients directly spoof these fields.
     delete recordToWrite.priority;
     delete recordToWrite.updated_at;
-    delete recordToWrite.sms_alert_sent;
-    delete recordToWrite.sms_alert_sent_at;
-    delete recordToWrite.last_notification_sent_at;
+    delete recordToWrite.internal_alert_sent;
+    delete recordToWrite.internal_alert_sent_at;
     delete recordToWrite.hubspot_sync_status;
     delete recordToWrite.hubspot_sync_error;
     delete recordToWrite.email_status;
     delete recordToWrite.email_error;
+    delete recordToWrite.lead_temperature;
 
     let saved;
     if (existing?.id) {
@@ -263,42 +479,151 @@ export default async function handler(req, res) {
       saved = data;
     }
 
-    const shouldSendSms =
-      saved.stage === "callback_requested" &&
-      saved.sms_alert_sent === false &&
-      previousStage !== "callback_requested";
+    const leadTemperature = classifyLead(saved);
 
-    let smsResult = {
+    const { data: withTemperature, error: tempError } = await supabase
+      .from("risk_assessments")
+      .update({ lead_temperature: leadTemperature })
+      .eq("id", saved.id)
+      .select("*")
+      .single();
+
+    if (tempError) throw tempError;
+    saved = withTemperature;
+
+    let internalAlertResult = {
       sent: false,
       skipped: true,
       reason: "Conditions not met",
     };
 
-    if (shouldSendSms) {
-      try {
-        smsResult = await sendAlertSms(saved);
+    const shouldSendInternalAlert =
+      saved.callback_requested === true &&
+      saved.internal_alert_sent === false &&
+      !previousInternalAlertSent &&
+      !previousCallbackRequested;
 
-        if (smsResult.sent) {
-          const { data: smsUpdated, error: smsUpdateError } = await supabase
+    if (shouldSendInternalAlert) {
+      try {
+        internalAlertResult = await sendInternalAlertEmail(saved);
+
+        if (internalAlertResult.sent) {
+          const { data: alertUpdated, error: alertUpdateError } = await supabase
             .from("risk_assessments")
             .update({
-              sms_alert_sent: true,
-              sms_alert_sent_at: new Date().toISOString(),
-              last_notification_sent_at: new Date().toISOString(),
+              internal_alert_sent: true,
+              internal_alert_sent_at: new Date().toISOString(),
             })
             .eq("id", saved.id)
             .select("*")
             .single();
 
-          if (smsUpdateError) throw smsUpdateError;
-          saved = smsUpdated;
+          if (alertUpdateError) throw alertUpdateError;
+          saved = alertUpdated;
         }
-      } catch (smsError) {
-        smsResult = {
+      } catch (emailError) {
+        internalAlertResult = {
           sent: false,
           skipped: false,
-          error: smsError.message || "SMS failed",
+          error: emailError.message || "Internal alert email failed",
         };
+
+        await supabase
+          .from("risk_assessments")
+          .update({
+            email_status: "failed",
+            email_error: emailError.message || "Internal alert email failed",
+          })
+          .eq("id", saved.id);
+      }
+    }
+
+    let nurtureResult = {
+      enrolled: false,
+      skipped: true,
+      reason: "Conditions not met",
+    };
+
+    if (shouldEnrollInNurture(saved)) {
+      const nextSendAt = new Date(
+        Date.now() + NUDGE_ENROLL_HOURS * 60 * 60 * 1000
+      ).toISOString();
+
+      const { data: nurtureUpdated, error: nurtureError } = await supabase
+        .from("risk_assessments")
+        .update({
+          nurture_status: "queued",
+          nurture_step: 0,
+          nurture_next_send_at: nextSendAt,
+          email_status: "queued",
+          email_error: null,
+        })
+        .eq("id", saved.id)
+        .select("*")
+        .single();
+
+      if (nurtureError) throw nurtureError;
+
+      saved = nurtureUpdated;
+      nurtureResult = {
+        enrolled: true,
+        next_send_at: nextSendAt,
+      };
+    }
+
+    if (saved.callback_requested === true && saved.nurture_status !== "paused") {
+      const { data: pausedNurture, error: pauseError } = await supabase
+        .from("risk_assessments")
+        .update({
+          nurture_status: "paused",
+          nurture_next_send_at: null,
+        })
+        .eq("id", saved.id)
+        .select("*")
+        .single();
+
+      if (!pauseError && pausedNurture) {
+        saved = pausedNurture;
+      }
+    }
+
+    let hubspotResult = {
+      synced: false,
+      skipped: true,
+      reason: "Conditions not met",
+    };
+
+    if (shouldSyncToHubSpot(saved)) {
+      try {
+        hubspotResult = await syncHubSpotContact(saved);
+
+        const { data: hsUpdated, error: hsError } = await supabase
+          .from("risk_assessments")
+          .update({
+            hubspot_contact_id: hubspotResult.contactId || saved.hubspot_contact_id,
+            hubspot_sync_status: hubspotResult.mode || "synced",
+            hubspot_sync_error: null,
+          })
+          .eq("id", saved.id)
+          .select("*")
+          .single();
+
+        if (hsError) throw hsError;
+        saved = hsUpdated;
+      } catch (hubspotError) {
+        hubspotResult = {
+          synced: false,
+          skipped: false,
+          error: hubspotError.message || "HubSpot sync failed",
+        };
+
+        await supabase
+          .from("risk_assessments")
+          .update({
+            hubspot_sync_status: "failed",
+            hubspot_sync_error: hubspotError.message || "HubSpot sync failed",
+          })
+          .eq("id", saved.id);
       }
     }
 
@@ -306,8 +631,12 @@ export default async function handler(req, res) {
       ok: true,
       id: saved.id,
       stage: saved.stage,
+      callback_requested: saved.callback_requested,
       priority: saved.priority,
-      sms: smsResult,
+      lead_temperature: saved.lead_temperature,
+      internal_alert: internalAlertResult,
+      nurture: nurtureResult,
+      hubspot: hubspotResult,
       record: saved,
     });
   } catch (error) {
