@@ -127,36 +127,118 @@ function mapStageToHubSpot(row) {
 }
 
 function buildInternalAlertSubject(row) {
-  const cityState = [row.city, row.state].filter(Boolean).join(", ");
-  const score = row.risk_score ?? "n/a";
-  return `Callback Requested | ${cityState || "Unknown Location"} | Risk Score ${score}`;
-}
-
-function buildInternalAlertHtml(row) {
-  const name =
+  const fullName =
     row.full_name ||
     [row.first_name, row.last_name].filter(Boolean).join(" ") ||
     "Unknown";
+  const scoreRaw = Number(row.risk_score ?? 0);
+  const score = Number.isFinite(scoreRaw) ? Math.round(scoreRaw) : "N/A";
+
+  return `🔥 New High-Intent Lead (${score}/100) — ${fullName}`;
+}
+
+function buildInternalAlertHtml(row) {
+  const firstName = row.first_name || "";
+  const lastName = row.last_name || "";
+  const fullName = [firstName, lastName].filter(Boolean).join(" ") || row.full_name || "Unknown";
+  const email = row.email || "N/A";
+  const phone = row.phone || "N/A";
+  const address = [row.street_address, row.city, row.state, row.zip_code]
+    .filter(Boolean)
+    .join(", ") || "N/A";
+  const scoreRaw = Number(row.risk_score ?? 0);
+  const score = Number.isFinite(scoreRaw) ? Math.round(scoreRaw) : "N/A";
+  const meetingLink = "https://meetings-na2.hubspot.com/nikolas-kron/assessment-meeting";
 
   return `
-    <h2>High-Priority Flood Lead</h2>
-    <p>A lead requested a callback.</p>
-    <table cellpadding="6" cellspacing="0" border="1" style="border-collapse: collapse;">
-      <tr><td><strong>Name</strong></td><td>${escapeHtml(name)}</td></tr>
-      <tr><td><strong>Email</strong></td><td>${escapeHtml(row.email || "")}</td></tr>
-      <tr><td><strong>Phone</strong></td><td>${escapeHtml(row.phone || "")}</td></tr>
-      <tr><td><strong>Address</strong></td><td>${escapeHtml(row.street_address || "")}</td></tr>
-      <tr><td><strong>City</strong></td><td>${escapeHtml(row.city || "")}</td></tr>
-      <tr><td><strong>State</strong></td><td>${escapeHtml(row.state || "")}</td></tr>
-      <tr><td><strong>ZIP</strong></td><td>${escapeHtml(row.zip_code || "")}</td></tr>
-      <tr><td><strong>Risk Score</strong></td><td>${escapeHtml(String(row.risk_score ?? ""))}</td></tr>
-      <tr><td><strong>Priority</strong></td><td>${escapeHtml(String(row.priority ?? ""))}</td></tr>
-      <tr><td><strong>Stage</strong></td><td>${escapeHtml(row.stage || "")}</td></tr>
-      <tr><td><strong>Property Type</strong></td><td>${escapeHtml(row.property_type || "")}</td></tr>
-      <tr><td><strong>Prior Flood Damage</strong></td><td>${escapeHtml(row.prior_flood_damage || "")}</td></tr>
-      <tr><td><strong>Drainage Issues</strong></td><td>${escapeHtml(row.drainage_issues || "")}</td></tr>
-      <tr><td><strong>Interest Area</strong></td><td>${escapeHtml(row.interest_area || "")}</td></tr>
-    </table>
+    <div style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;">
+      <div style="max-width:640px;margin:0 auto;padding:24px 16px;">
+        <div style="background:#ffffff;border-radius:14px;border:1px solid #e5e7eb;overflow:hidden;">
+          <div style="background:#7f1d1d;color:#ffffff;padding:18px 24px;">
+            <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.9;">
+              Oiriunu Alert
+            </div>
+            <div style="font-size:20px;font-weight:700;margin-top:6px;">
+              High-Intent Lead
+            </div>
+          </div>
+
+          <div style="padding:28px 24px;">
+            <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 16px;margin-bottom:22px;">
+              <div style="font-size:14px;color:#991b1b;font-weight:700;">
+                Priority Score: ${escapeHtml(String(score))}/100
+              </div>
+              <div style="font-size:13px;color:#7f1d1d;margin-top:4px;">
+                Callback requested — immediate follow-up recommended
+              </div>
+            </div>
+
+            <table style="width:100%;border-collapse:collapse;font-size:14px;color:#374151;">
+              <tr>
+                <td style="padding:6px 0;font-weight:600;width:130px;">Name:</td>
+                <td>${escapeHtml(fullName)}</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 0;font-weight:600;">Email:</td>
+                <td>${escapeHtml(email)}</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 0;font-weight:600;">Phone:</td>
+                <td>${escapeHtml(phone)}</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 0;font-weight:600;">Address:</td>
+                <td>${escapeHtml(address)}</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 0;font-weight:600;">Property Type:</td>
+                <td>${escapeHtml(row.property_type || "N/A")}</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 0;font-weight:600;">Prior Flood Damage:</td>
+                <td>${escapeHtml(row.prior_flood_damage || "N/A")}</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 0;font-weight:600;">Drainage Issues:</td>
+                <td>${escapeHtml(row.drainage_issues || "N/A")}</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 0;font-weight:600;">Interest Area:</td>
+                <td>${escapeHtml(row.interest_area || "N/A")}</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 0;font-weight:600;">Stage:</td>
+                <td>${escapeHtml(row.stage || "N/A")}</td>
+              </tr>
+            </table>
+
+            <div style="margin:22px 0;border-top:1px solid #e5e7eb;"></div>
+
+            <div style="font-size:15px;color:#111827;font-weight:600;margin-bottom:10px;">
+              Recommended next action
+            </div>
+
+            <div style="font-size:14px;color:#374151;line-height:1.6;margin-bottom:18px;">
+              Reach out to this lead as soon as possible. They have explicitly requested follow-up and are likely evaluating next steps.
+            </div>
+
+            <div style="margin-bottom:12px;">
+              <a href="mailto:${escapeHtml(email)}" style="display:inline-block;background:#163c35;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:600;margin-right:8px;">
+                Email Lead
+              </a>
+
+              <a href="${meetingLink}" style="display:inline-block;background:#1f2937;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:600;">
+                Book Call
+              </a>
+            </div>
+
+            <div style="margin-top:20px;font-size:12px;color:#6b7280;">
+              This lead was generated via the Oiriunu Flood Risk Assessment tool.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   `;
 }
 
