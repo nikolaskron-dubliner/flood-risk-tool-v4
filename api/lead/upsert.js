@@ -447,7 +447,7 @@ export default async function handler(req, res) {
       };
     }
 
-    // Do not let clients directly spoof these fields.
+        // Do not let clients directly spoof these fields.
     delete recordToWrite.priority;
     delete recordToWrite.updated_at;
     delete recordToWrite.sms_alert_sent;
