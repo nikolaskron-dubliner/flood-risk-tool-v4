@@ -260,12 +260,28 @@ async function sendInternalAlertEmail(row) {
     };
   }
 
-  const result = await resend.emails.send({
-    from: process.env.ALERT_FROM_EMAIL,
-    to: process.env.ALERT_TO_EMAIL,
-    subject: buildInternalAlertSubject(row),
-    html: buildInternalAlertHtml(row),
-  });
+let subject;
+let html;
+
+try {
+  subject = buildInternalAlertSubject(row);
+  html = buildInternalAlertHtml(row);
+} catch (e) {
+  console.error("EMAIL BUILD ERROR:", e);
+  return {
+    sent: false,
+    error: "Email build failed: " + (e?.message || String(e)),
+  };
+}
+
+const result = await resend.emails.send({
+  from: process.env.ALERT_FROM_EMAIL,
+  to: process.env.ALERT_TO_EMAIL,
+  subject,
+  html,
+});
+
+console.log("RESEND RESPONSE:", result);
 
   return {
     sent: true,

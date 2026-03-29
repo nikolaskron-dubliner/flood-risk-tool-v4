@@ -38,47 +38,181 @@ function getBody(req) {
 
 function buildEmailContent(row) {
   const firstName = row.first_name || "there";
-  const score = row.risk_score ?? "your";
+  const scoreRaw = Number(row.risk_score ?? 0);
+  const score = Number.isFinite(scoreRaw) ? Math.max(0, Math.min(100, Math.round(scoreRaw))) : 0;
   const location = [row.city, row.state].filter(Boolean).join(", ");
+  const reportLink = "https://oiriunu.com/flood-risk-assessment/";
+  const meetingLink =
+    "https://meetings-na2.hubspot.com/nikolas-kron/assessment-meeting";
+  const drainageLink =
+    "https://oiriunu.com/flood-prevention-solutions-texas/water-diversion-texas/";
+  const entryPointLink =
+    "https://oiriunu.com/flood-prevention-solutions-texas/entry-point-protection/";
+  const waterRemovalLink =
+    "https://oiriunu.com/flood-prevention-solutions-texas/water-removal/";
+
+  function wrapEmail({ preheader, title, introHtml, bodyHtml, buttonText, buttonUrl }) {
+    return `
+      <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
+        ${esc(preheader)}
+      </div>
+      <div style="margin:0;padding:0;background:#f4f7f8;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+        <div style="max-width:640px;margin:0 auto;padding:32px 16px;">
+          <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;">
+            <div style="background:#163c35;padding:20px 28px;">
+              <div style="font-size:12px;line-height:1.4;letter-spacing:.08em;text-transform:uppercase;color:#d1e7e1;font-weight:700;">
+                Oiriunu
+              </div>
+            </div>
+
+            <div style="padding:36px 28px 18px;">
+              <h1 style="margin:0 0 16px;font-size:30px;line-height:1.2;color:#111827;font-weight:700;">
+                ${title}
+              </h1>
+
+              <div style="font-size:16px;line-height:1.75;color:#374151;">
+                ${introHtml}
+                ${bodyHtml}
+              </div>
+
+              <div style="margin-top:28px;">
+                <a href="${buttonUrl}" style="display:inline-block;background:#163c35;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:10px;font-size:15px;font-weight:700;">
+                  ${buttonText}
+                </a>
+              </div>
+
+              <div style="margin-top:28px;padding-top:22px;border-top:1px solid #e5e7eb;font-size:13px;line-height:1.7;color:#6b7280;">
+                <p style="margin:0 0 10px;">
+                  Oiriunu helps homeowners identify practical ways to reduce property risk through both DIY solutions and professional support.
+                </p>
+                <p style="margin:0 0 10px;">
+                  Oiriunu may earn commission through affiliate marketing links for DIY purchases and may also earn commission on referral services.
+                </p>
+                <p style="margin:0;">
+                  If you have questions, simply reply to this email.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
 
   if (row.nurture_step === 0) {
     return {
-      subject: "Your property risk results are ready",
-      html: `
-        <p>Hi ${esc(firstName)},</p>
-        <p>Your property risk assessment is complete.</p>
-        <p>Your current risk score is <strong>${esc(score)}</strong>${location ? ` for ${esc(location)}` : ""}.</p>
-        <p>We look at both flood exposure and insurance-related risk to help identify where homeowners may be more vulnerable.</p>
-        <p>If you want to discuss your property in more detail, you can schedule a call here:</p>
-        <p><a href="${MEETING_LINK}">${MEETING_LINK}</a></p>
-        <p>Regards,<br/>Oiriunu</p>
-      `,
+      subject: "Your Oiriunu property risk assessment is ready",
+      html: wrapEmail({
+        preheader: "Your Oiriunu property risk assessment is ready.",
+        title: "Your Oiriunu property risk assessment is ready",
+        introHtml: `
+          <p style="margin:0 0 16px;">Hi ${esc(firstName)},</p>
+          <p style="margin:0 0 16px;">
+            Your property risk assessment is complete${location ? ` for <strong>${esc(location)}</strong>` : ""}.
+          </p>
+          <p style="margin:0 0 16px;">
+            Oiriunu reviews both flood exposure and insurance-related risk factors to better understand how vulnerable a property may be.
+          </p>
+        `,
+        bodyHtml: `
+          <p style="margin:0 0 16px;">
+            If you want to review your results and discuss possible next steps, you can also schedule an assessment call with us.
+          </p>
+        `,
+        buttonText: "Re-run your assessment report",
+        buttonUrl: reportLink
+      })
     };
   }
 
   if (row.nurture_step === 1) {
     return {
-      subject: "What your flood and insurance risk may mean",
-      html: `
-        <p>Hi ${esc(firstName)},</p>
-        <p>A higher property risk score can point to more than just flood exposure. It can also reflect property vulnerability, drainage concerns, and insurance-related pressure.</p>
-        <p>Your current score is <strong>${esc(score)}</strong>.</p>
-        <p>If you want help interpreting what this means for your property, schedule a call here:</p>
-        <p><a href="${MEETING_LINK}">${MEETING_LINK}</a></p>
-        <p>Regards,<br/>Oiriunu</p>
-      `,
+      subject: "Why your Oiriunu property risk score matters",
+      html: wrapEmail({
+        preheader: "Why your Oiriunu property risk score matters.",
+        title: "Why your Oiriunu property risk score matters",
+        introHtml: `
+          <p style="margin:0 0 16px;">Hi ${esc(firstName)},</p>
+          <p style="margin:0 0 16px;">
+            Your Oiriunu property risk score is <strong>${esc(score)} out of 100</strong>.
+          </p>
+          <p style="margin:0 0 16px;">
+            Thinking about the score as a percentage is important. A score of <strong>${esc(score)}%</strong> indicates a meaningful level of property risk and is not just a neutral number on its own.
+          </p>
+        `,
+        bodyHtml: `
+          <p style="margin:0 0 16px;">
+            A higher score can reflect more than flood location alone. It may also point to drainage concerns, home-specific vulnerability, past water-related problems, and insurance-related pressure.
+          </p>
+          <p style="margin:0 0 16px;">
+            For many homeowners, the most important question is not only whether flooding is possible, but what that risk could mean for future damage, disruption, and cost.
+          </p>
+          <p style="margin:0 0 16px;">
+            If you would like help interpreting your result, you can schedule a review call below.
+          </p>
+        `,
+        buttonText: "Schedule a review call",
+        buttonUrl: meetingLink
+      })
     };
   }
 
   return {
     subject: "Next steps to reduce your property risk",
-    html: `
-      <p>Hi ${esc(firstName)},</p>
-      <p>If you are thinking about reducing your property risk, the next step is usually identifying the most practical improvements for your home and budget.</p>
-      <p>If you want to review your situation with us, book a time here:</p>
-      <p><a href="${MEETING_LINK}">${MEETING_LINK}</a></p>
-      <p>Regards,<br/>Oiriunu</p>
-    `,
+    html: wrapEmail({
+      preheader: "Next steps to reduce your property risk.",
+      title: "Next steps to reduce your property risk",
+      introHtml: `
+        <p style="margin:0 0 16px;">Hi ${esc(firstName)},</p>
+        <p style="margin:0 0 16px;">
+          If you are thinking about protecting your property, the next step is usually identifying the most practical improvements for your home, budget, and risk profile.
+        </p>
+      `,
+      bodyHtml: `
+        <p style="margin:0 0 14px;">That may include:</p>
+
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;margin:0 0 18px;">
+          <tr>
+            <td style="padding:12px 0;border-top:1px solid #e5e7eb;">
+              <a href="${drainageLink}" style="color:#163c35;font-weight:700;text-decoration:none;">Drainage improvements</a>
+              <div style="margin-top:4px;font-size:14px;line-height:1.6;color:#4b5563;">
+                Explore water diversion approaches that may help move water away from the home.
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:12px 0;border-top:1px solid #e5e7eb;">
+              <a href="${entryPointLink}" style="color:#163c35;font-weight:700;text-decoration:none;">Entry point protection</a>
+              <div style="margin-top:4px;font-size:14px;line-height:1.6;color:#4b5563;">
+                Review ways to protect doors, openings, and other vulnerable access points.
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:12px 0;border-top:1px solid #e5e7eb;">
+              <a href="${waterRemovalLink}" style="color:#163c35;font-weight:700;text-decoration:none;">Water removal planning</a>
+              <div style="margin-top:4px;font-size:14px;line-height:1.6;color:#4b5563;">
+                Consider pumps, removal tools, and response planning before the next event occurs.
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:12px 0;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;">
+              <a href="${meetingLink}" style="color:#163c35;font-weight:700;text-decoration:none;">Professional assessment of vulnerabilities</a>
+              <div style="margin-top:4px;font-size:14px;line-height:1.6;color:#4b5563;">
+                Book a time to review your property and discuss practical next steps.
+              </div>
+            </td>
+          </tr>
+        </table>
+
+        <p style="margin:0 0 16px;">
+          Oiriunu supports homeowners through both DIY solutions and connections to qualified professionals, depending on what makes the most sense for the property.
+        </p>
+      `,
+      buttonText: "Schedule your assessment call",
+      buttonUrl: meetingLink
+    })
   };
 }
 
