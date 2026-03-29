@@ -447,15 +447,21 @@ export default async function handler(req, res) {
       };
     }
 
+    // Do not let clients directly spoof these fields.
     delete recordToWrite.priority;
     delete recordToWrite.updated_at;
-    delete recordToWrite.internal_alert_sent;
-    delete recordToWrite.internal_alert_sent_at;
+    delete recordToWrite.sms_alert_sent;
+    delete recordToWrite.sms_alert_sent_at;
+    delete recordToWrite.last_notification_sent_at;
     delete recordToWrite.hubspot_sync_status;
     delete recordToWrite.hubspot_sync_error;
     delete recordToWrite.email_status;
     delete recordToWrite.email_error;
-    delete recordToWrite.lead_temperature;
+
+    // Critical: if no id exists yet, remove it so Postgres can apply the default UUID.
+    if (!recordToWrite.id) {
+      delete recordToWrite.id;
+    }
 
     let saved;
     if (existing?.id) {
