@@ -595,31 +595,39 @@ export default async function handler(req, res) {
     if (tempError) throw tempError;
     saved = withTemperature;
 
-if (segment === "high_intent") {
-  // send internal alert
-  // DO NOT enroll in nurture
-}
+    let segment;
+    if (saved.callback_requested === true) {
+      segment = "high_intent";
+    } else if (Number(saved.priority || 0) >= HIGH_PRIORITY_SCORE) {
+      segment = "high_no_callback";
+    } else if (saved.lead_temperature === "medium") {
+      segment = "medium";
+    } else {
+      segment = "low";
+    }
 
-else if (segment === "high_no_callback") {
-  await supabase
-    .from("risk_assessments")
-    .update({
-      lead_segment: "high_no_callback",
-      nurture_status: "queued",
-      nurture_type: "urgent",
-      nurture_step: 0,
-      nurture_next_send_at: new Date().toISOString()
-    })
-    .eq("id", row.id);
-}
+    let internalAlertResult = { sent: false, skipped: true, reason: "Conditions not met" };
+    let nurtureResult = { enrolled: false, skipped: true, reason: "Conditions not met" };
 
-else if (segment === "medium") {
-  // standard nurture
-}
-
-else {
-  // low nurture
-}
+    if (segment === "high_intent") {
+      // send internal alert
+      // DO NOT enroll in nurture
+    } else if (segment === "high_no_callback") {
+      await supabase
+        .from("risk_assessments")
+        .update({
+          lead_segment: "high_no_callback",
+          nurture_status: "queued",
+          nurture_type: "urgent",
+          nurture_step: 0,
+          nurture_next_send_at: new Date().toISOString(),
+        })
+        .eq("id", saved.id);
+    } else if (segment === "medium") {
+      // standard nurture
+    } else {
+      // low nurture
+    }
 
     let hubspotResult = {
       synced: false,
