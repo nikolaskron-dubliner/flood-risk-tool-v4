@@ -595,101 +595,31 @@ export default async function handler(req, res) {
     if (tempError) throw tempError;
     saved = withTemperature;
 
-    let internalAlertResult = {
-      sent: false,
-      skipped: true,
-      reason: "Conditions not met",
-    };
+if (segment === "high_intent") {
+  // send internal alert
+  // DO NOT enroll in nurture
+}
 
-    const shouldSendInternalAlert =
-      saved.callback_requested === true &&
-      saved.internal_alert_sent === false &&
-      !previousInternalAlertSent &&
-      !previousCallbackRequested;
+else if (segment === "high_no_callback") {
+  await supabase
+    .from("risk_assessments")
+    .update({
+      lead_segment: "high_no_callback",
+      nurture_status: "queued",
+      nurture_type: "urgent",
+      nurture_step: 0,
+      nurture_next_send_at: new Date().toISOString()
+    })
+    .eq("id", row.id);
+}
 
-    if (shouldSendInternalAlert) {
-      try {
-        internalAlertResult = await sendInternalAlertEmail(saved);
+else if (segment === "medium") {
+  // standard nurture
+}
 
-        if (internalAlertResult.sent) {
-          const { data: alertUpdated, error: alertUpdateError } = await supabase
-            .from("risk_assessments")
-            .update({
-              internal_alert_sent: true,
-              internal_alert_sent_at: new Date().toISOString(),
-            })
-            .eq("id", saved.id)
-            .select("*")
-            .single();
-
-          if (alertUpdateError) throw alertUpdateError;
-          saved = alertUpdated;
-        }
-      } catch (emailError) {
-        internalAlertResult = {
-          sent: false,
-          skipped: false,
-          error: emailError.message || "Internal alert email failed",
-        };
-
-        await supabase
-          .from("risk_assessments")
-          .update({
-            email_status: "failed",
-            email_error: emailError.message || "Internal alert email failed",
-          })
-          .eq("id", saved.id);
-      }
-    }
-
-    let nurtureResult = {
-      enrolled: false,
-      skipped: true,
-      reason: "Conditions not met",
-    };
-
-    if (shouldEnrollInNurture(saved)) {
-      const nextSendAt = new Date(
-        Date.now() + NUDGE_ENROLL_HOURS * 60 * 60 * 1000
-      ).toISOString();
-
-      const { data: nurtureUpdated, error: nurtureError } = await supabase
-        .from("risk_assessments")
-        .update({
-          nurture_status: "queued",
-          nurture_step: 0,
-          nurture_next_send_at: nextSendAt,
-          email_status: "queued",
-          email_error: null,
-        })
-        .eq("id", saved.id)
-        .select("*")
-        .single();
-
-      if (nurtureError) throw nurtureError;
-
-      saved = nurtureUpdated;
-      nurtureResult = {
-        enrolled: true,
-        next_send_at: nextSendAt,
-      };
-    }
-
-    if (saved.callback_requested === true && saved.nurture_status !== "paused") {
-      const { data: pausedNurture, error: pauseError } = await supabase
-        .from("risk_assessments")
-        .update({
-          nurture_status: "paused",
-          nurture_next_send_at: null,
-        })
-        .eq("id", saved.id)
-        .select("*")
-        .single();
-
-      if (!pauseError && pausedNurture) {
-        saved = pausedNurture;
-      }
-    }
+else {
+  // low nurture
+}
 
     let hubspotResult = {
       synced: false,

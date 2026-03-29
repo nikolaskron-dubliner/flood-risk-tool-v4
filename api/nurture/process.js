@@ -242,13 +242,81 @@ function getNextSchedule(stepJustSent) {
   };
 }
 
-async function sendNurtureEmail(row) {
-  if (!resend) {
-    throw new Error("Resend is not configured.");
-  }
+function buildUrgentEmailContent(row) {
+  const firstName = row.first_name || "there";
+  const scoreRaw = Number(row.risk_score ?? 0);
+  const score = Number.isFinite(scoreRaw) ? Math.max(0, Math.min(100, Math.round(scoreRaw))) : 0;
+  const location = [row.city, row.state].filter(Boolean).join(", ");
+  const meetingLink = "https://meetings-na2.hubspot.com/nikolas-kron/assessment-meeting";
 
+  return {
+    subject: `Your property risk score is ${score}/100 — here's what to do next`,
+    html: `
+      <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
+        Your property has a high risk score. Here's what we recommend.
+      </div>
+      <div style="margin:0;padding:0;background:#f4f7f8;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+        <div style="max-width:640px;margin:0 auto;padding:32px 16px;">
+          <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;">
+            <div style="background:#7f1d1d;padding:20px 28px;">
+              <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#fecaca;font-weight:700;">
+                Oiriunu — Priority Alert
+              </div>
+            </div>
+
+            <div style="padding:36px 28px 18px;">
+              <h1 style="margin:0 0 16px;font-size:28px;line-height:1.2;color:#111827;font-weight:700;">
+                Hi ${esc(firstName)}, your property risk score is ${esc(String(score))}/100
+              </h1>
+
+              <div style="font-size:16px;line-height:1.75;color:#374151;">
+                <p style="margin:0 0 16px;">
+                  ${location ? `Your property in <strong>${esc(location)}</strong> has` : "Your property has"} a high risk score. That puts it in a range where flood exposure, drainage concerns, or structural vulnerability may warrant a closer look.
+                </p>
+                <p style="margin:0 0 16px;">
+                  We recommend scheduling a short assessment call so we can walk through your results and identify the most practical next steps for your specific property.
+                </p>
+              </div>
+
+              <div style="margin-top:28px;">
+                <a href="${meetingLink}" style="display:inline-block;background:#7f1d1d;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:10px;font-size:15px;font-weight:700;">
+                  Book your assessment call
+                </a>
+              </div>
+
+              <div style="margin-top:28px;padding-top:22px;border-top:1px solid #e5e7eb;font-size:13px;line-height:1.7;color:#6b7280;">
+                <p style="margin:0 0 10px;">
+                  Oiriunu helps homeowners identify practical ways to reduce property risk through both DIY solutions and professional support.
+                </p>
+                <p style="margin:0 0 10px;">
+                  Oiriunu may earn commission through affiliate marketing links for DIY purchases and may also earn commission on referral services.
+                </p>
+                <p style="margin:0;">
+                  If you have questions, simply reply to this email.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `,
+  };
+}
+
+async function sendStandardEmail(row) {
+  if (!resend) throw new Error("Resend is not configured.");
   const content = buildEmailContent(row);
+  return resend.emails.send({
+    from: process.env.ALERT_FROM_EMAIL,
+    to: row.email,
+    subject: content.subject,
+    html: content.html,
+  });
+}
 
+async function sendUrgentEmail(row) {
+  if (!resend) throw new Error("Resend is not configured.");
+  const content = buildUrgentEmailContent(row);
   return resend.emails.send({
     from: process.env.ALERT_FROM_EMAIL,
     to: row.email,
@@ -314,7 +382,11 @@ export default async function handler(req, res) {
           continue;
         }
 
-        await sendNurtureEmail(row);
+if (row.nurture_type === "urgent") {
+  sendUrgentEmail(row);
+} else {
+  sendStandardEmail(row);
+}
 
         const nextState = getNextSchedule(row.nurture_step);
 
