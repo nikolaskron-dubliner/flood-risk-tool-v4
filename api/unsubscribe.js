@@ -87,7 +87,6 @@ export default async function handler(req, res) {
     .from("risk_assessments")
     .update({
       email_unsubscribed: true,
-      nurture_status: "unsubscribed",
     })
     .eq("id", id);
 
