@@ -610,24 +610,68 @@ export default async function handler(req, res) {
     let nurtureResult = { enrolled: false, skipped: true, reason: "Conditions not met" };
 
     if (segment === "high_intent") {
-      // send internal alert
-      // DO NOT enroll in nurture
-    } else if (segment === "high_no_callback") {
+  // Meeting requested — send internal alert, skip nurture
+  if (!previousInternalAlertSent) {
+    try {
+      internalAlertResult = await sendInternalAlertEmail(saved);
       await supabase
         .from("risk_assessments")
         .update({
-          lead_segment: "high_no_callback",
-          nurture_status: "queued",
-          nurture_type: "urgent",
-          nurture_step: 0,
-          nurture_next_send_at: new Date().toISOString(),
+          lead_segment: "high_intent",
+          internal_alert_sent: true,
+          internal_alert_sent_at: new Date().toISOString(),
         })
         .eq("id", saved.id);
-    } else if (segment === "medium") {
-      // standard nurture
-    } else {
-      // low nurture
+    } catch (alertErr) {
+      internalAlertResult = { sent: false, error: alertErr.message };
     }
+  } else {
+    internalAlertResult = { sent: false, skipped: true, reason: "Alert already sent" };
+  }
+  nurtureResult = { enrolled: false, skipped: true, reason: "Callback requested — not enrolled in nurture" };
+
+} else if (segment === "high_no_callback") {
+  // High risk, no meeting requested — urgent nurture sequence
+  await supabase
+    .from("risk_assessments")
+    .update({
+      lead_segment: "high_no_callback",
+      nurture_status: "queued",
+      nurture_type: "high_no_callback",
+      nurture_step: 0,
+      nurture_next_send_at: new Date().toISOString(),
+    })
+    .eq("id", saved.id);
+  nurtureResult = { enrolled: true, type: "high_no_callback" };
+
+} else if (segment === "medium") {
+  // Medium risk — standard nurture sequence
+  await supabase
+    .from("risk_assessments")
+    .update({
+      lead_segment: "medium",
+      nurture_status: "queued",
+      nurture_type: "medium",
+      nurture_step: 0,
+      nurture_next_send_at: new Date().toISOString(),
+    })
+    .eq("id", saved.id);
+  nurtureResult = { enrolled: true, type: "medium" };
+
+} else {
+  // Low risk — low nurture sequence
+  await supabase
+    .from("risk_assessments")
+    .update({
+      lead_segment: "low",
+      nurture_status: "queued",
+      nurture_type: "low",
+      nurture_step: 0,
+      nurture_next_send_at: new Date().toISOString(),
+    })
+    .eq("id", saved.id);
+  nurtureResult = { enrolled: true, type: "low" };
+}
 
     let hubspotResult = {
       synced: false,

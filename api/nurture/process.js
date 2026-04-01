@@ -249,51 +249,92 @@ function buildUrgentEmailContent(row) {
   const location = [row.city, row.state].filter(Boolean).join(", ");
   const meetingLink = "https://meetings-na2.hubspot.com/nikolas-kron/assessment-meeting";
 
+  // Step 0 — immediate: score callout, book a call
+  if (row.nurture_step === 0) {
+    return {
+      subject: `Your property risk score is ${score}/100 — here's what to do next`,
+      html: `
+        <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
+          Your property has a high risk score. Here's what we recommend.
+        </div>
+        <div style="margin:0;padding:0;background:#f4f7f8;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+          <div style="max-width:640px;margin:0 auto;padding:32px 16px;">
+            <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;">
+              <div style="background:#7f1d1d;padding:20px 28px;">
+                <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#fecaca;font-weight:700;">
+                  Oiriunu — Priority Alert
+                </div>
+              </div>
+              <div style="padding:36px 28px 18px;">
+                <h1 style="margin:0 0 16px;font-size:28px;line-height:1.2;color:#111827;font-weight:700;">
+                  Hi ${esc(firstName)}, your property risk score is ${esc(String(score))}/100
+                </h1>
+                <div style="font-size:16px;line-height:1.75;color:#374151;">
+                  <p style="margin:0 0 16px;">
+                    ${location ? `Your property in <strong>${esc(location)}</strong> has` : "Your property has"} a high risk score. That puts it in a range where flood exposure, drainage concerns, or structural vulnerability may warrant a closer look.
+                  </p>
+                  <p style="margin:0 0 16px;">
+                    We recommend scheduling a short assessment call so we can walk through your results and identify the most practical next steps for your specific property.
+                  </p>
+                </div>
+                <div style="margin-top:28px;">
+                  <a href="${meetingLink}" style="display:inline-block;background:#7f1d1d;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:10px;font-size:15px;font-weight:700;">
+                    Book your assessment call
+                  </a>
+                </div>
+                <div style="margin-top:28px;padding-top:22px;border-top:1px solid #e5e7eb;font-size:13px;line-height:1.7;color:#6b7280;">
+                  <p style="margin:0 0 10px;">Oiriunu helps homeowners identify practical ways to reduce property risk through both DIY solutions and professional support.</p>
+                  <p style="margin:0 0 10px;">Oiriunu may earn commission through affiliate marketing links for DIY purchases and may also earn commission on referral services.</p>
+                  <p style="margin:0;">If you have questions, simply reply to this email.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `,
+    };
+  }
+
+  // Step 1 — 24 hours later: follow-up for those who haven't booked yet
   return {
-    subject: `Your property risk score is ${score}/100 — here's what to do next`,
+    subject: `Still thinking about your property risk, ${firstName}?`,
     html: `
       <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
-        Your property has a high risk score. Here's what we recommend.
+        A quick follow-up on your Oiriunu risk assessment.
       </div>
       <div style="margin:0;padding:0;background:#f4f7f8;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
         <div style="max-width:640px;margin:0 auto;padding:32px 16px;">
           <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;">
             <div style="background:#7f1d1d;padding:20px 28px;">
               <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#fecaca;font-weight:700;">
-                Oiriunu — Priority Alert
+                Oiriunu — Follow-Up
               </div>
             </div>
-
             <div style="padding:36px 28px 18px;">
               <h1 style="margin:0 0 16px;font-size:28px;line-height:1.2;color:#111827;font-weight:700;">
-                Hi ${esc(firstName)}, your property risk score is ${esc(String(score))}/100
+                We wanted to follow up on your score
               </h1>
-
               <div style="font-size:16px;line-height:1.75;color:#374151;">
+                <p style="margin:0 0 16px;">Hi ${esc(firstName)},</p>
                 <p style="margin:0 0 16px;">
-                  ${location ? `Your property in <strong>${esc(location)}</strong> has` : "Your property has"} a high risk score. That puts it in a range where flood exposure, drainage concerns, or structural vulnerability may warrant a closer look.
+                  Yesterday we shared that your Oiriunu property risk score is <strong>${esc(String(score))} out of 100</strong>. We wanted to follow up in case you had questions or wanted to talk through what that score means for your specific situation.
                 </p>
                 <p style="margin:0 0 16px;">
-                  We recommend scheduling a short assessment call so we can walk through your results and identify the most practical next steps for your specific property.
+                  The assessment call is short — typically 15 to 20 minutes. We will walk through your results, answer any questions, and outline the most practical options for your property and budget. There is no obligation.
+                </p>
+                <p style="margin:0 0 16px;">
+                  If now is not the right time, no problem. You can always come back to your results when you are ready.
                 </p>
               </div>
-
               <div style="margin-top:28px;">
                 <a href="${meetingLink}" style="display:inline-block;background:#7f1d1d;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:10px;font-size:15px;font-weight:700;">
-                  Book your assessment call
+                  Schedule your free assessment call
                 </a>
               </div>
-
               <div style="margin-top:28px;padding-top:22px;border-top:1px solid #e5e7eb;font-size:13px;line-height:1.7;color:#6b7280;">
-                <p style="margin:0 0 10px;">
-                  Oiriunu helps homeowners identify practical ways to reduce property risk through both DIY solutions and professional support.
-                </p>
-                <p style="margin:0 0 10px;">
-                  Oiriunu may earn commission through affiliate marketing links for DIY purchases and may also earn commission on referral services.
-                </p>
-                <p style="margin:0;">
-                  If you have questions, simply reply to this email.
-                </p>
+                <p style="margin:0 0 10px;">Oiriunu helps homeowners identify practical ways to reduce property risk through both DIY solutions and professional support.</p>
+                <p style="margin:0 0 10px;">Oiriunu may earn commission through affiliate marketing links for DIY purchases and may also earn commission on referral services.</p>
+                <p style="margin:0;">If you have questions, simply reply to this email.</p>
               </div>
             </div>
           </div>
@@ -383,9 +424,9 @@ export default async function handler(req, res) {
         }
 
 if (row.nurture_type === "urgent") {
-  sendUrgentEmail(row);
+  await sendUrgentEmail(row);
 } else {
-  sendStandardEmail(row);
+ await sendStandardEmail(row);
 }
 
         const nextState = getNextSchedule(row.nurture_step);
