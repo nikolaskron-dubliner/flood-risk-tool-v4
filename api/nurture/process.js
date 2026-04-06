@@ -422,7 +422,7 @@ function buildUrgentEmailContent(row) {
                 <div style="margin-top:28px;padding-top:22px;border-top:1px solid #e5e7eb;font-size:13px;line-height:1.7;color:#6b7280;">
                   <p style="margin:0 0 10px;">Oiriunu helps homeowners identify practical ways to reduce property risk through both DIY solutions and professional support.</p>
                   <p style="margin:0 0 10px;">Oiriunu may earn commission through affiliate marketing links for DIY purchases and may also earn commission on referral services.</p>
-                  <p style="margin:0 0 10px;">If you have questions, simply reply to this email.</p>
+                  <p style="margin:0 0 10px;">Reply to this email with any questions — we read every response.</p>
                   <p style="margin:0;padding-top:10px;border-top:1px solid #e5e7eb;">
                     <a href="${unsubUrl0}" style="color:#9ca3af;font-size:12px;text-decoration:underline;">Unsubscribe from these emails</a>
                   </p>
