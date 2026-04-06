@@ -559,11 +559,11 @@ export default async function handler(req, res) {
           continue;
         }
 
-        if (row.nurture_type === "urgent") {
-          await sendUrgentEmail(row);
-        } else {
-          await sendStandardEmail(row);
-        }
+        if (row.nurture_type === "urgent" || row.nurture_type === "high_no_callback") {
+  await sendUrgentEmail(row);
+} else {
+  await sendStandardEmail(row);
+}
 
         const nextState = getNextSchedule(row.nurture_step);
 
