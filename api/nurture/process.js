@@ -494,6 +494,7 @@ async function sendStandardEmail(row) {
   return resend.emails.send({
     from: process.env.ALERT_FROM_EMAIL,
     to: row.email,
+    reply_to: process.env.ALERT_FROM_EMAIL,
     subject: content.subject,
     html: content.html,
   });
@@ -505,6 +506,7 @@ async function sendUrgentEmail(row) {
   return resend.emails.send({
     from: process.env.ALERT_FROM_EMAIL,
     to: row.email,
+    reply_to: process.env.ALERT_FROM_EMAIL,
     subject: content.subject,
     html: content.html,
   });
