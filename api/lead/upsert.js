@@ -289,6 +289,109 @@ console.log("RESEND RESPONSE:", result);
   };
 }
 
+function buildCallbackConfirmationSubject(row) {
+  const firstName = row.first_name || "there";
+  return `We received your request, ${firstName} — next steps from Oiriunu`;
+}
+
+function buildCallbackConfirmationHtml(row) {
+  const firstName = row.first_name || "there";
+  const scoreRaw = Number(row.risk_score ?? 0);
+  const score = Number.isFinite(scoreRaw) ? Math.round(scoreRaw) : null;
+  const address =
+    [row.street_address, row.city, row.state, row.zip_code]
+      .filter(Boolean)
+      .join(", ") || "your property";
+
+  const meetingLink =
+    "https://meetings-na2.hubspot.com/nikolas-kron/assessment-meeting";
+
+  return `
+    <div style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;">
+      <div style="max-width:640px;margin:0 auto;padding:24px 16px;">
+        <div style="background:#ffffff;border-radius:14px;border:1px solid #e5e7eb;overflow:hidden;">
+          <div style="background:#163c35;color:#ffffff;padding:20px 24px;">
+            <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.9;">
+              Oiriunu
+            </div>
+            <div style="font-size:22px;font-weight:700;margin-top:6px;">
+              We received your request
+            </div>
+          </div>
+
+          <div style="padding:28px 24px;">
+            <p style="margin:0 0 16px;font-size:16px;line-height:1.7;color:#374151;">
+              Hi ${escapeHtml(firstName)},
+            </p>
+
+            <p style="margin:0 0 16px;font-size:16px;line-height:1.7;color:#374151;">
+              Thank you for completing your Oiriunu flood risk assessment and requesting follow-up.
+              Our team has received your information and will review your property details shortly.
+            </p>
+
+            <div style="background:#f0f7f5;border:1px solid #cfe6dd;border-radius:10px;padding:14px 16px;margin:18px 0;">
+              <div style="font-size:13px;color:#163c35;font-weight:700;margin-bottom:6px;">
+                Assessment summary
+              </div>
+              <div style="font-size:14px;color:#374151;line-height:1.6;">
+                <div><strong>Property:</strong> ${escapeHtml(address)}</div>
+                <div><strong>Email:</strong> ${escapeHtml(row.email || "N/A")}</div>
+                <div><strong>Phone:</strong> ${escapeHtml(row.phone || "N/A")}</div>
+                ${
+                  score !== null
+                    ? `<div><strong>Risk score:</strong> ${escapeHtml(String(score))}/100</div>`
+                    : ""
+                }
+                <div><strong>Interest area:</strong> ${escapeHtml(row.interest_area || "General Information")}</div>
+              </div>
+            </div>
+
+            <p style="margin:0 0 16px;font-size:16px;line-height:1.7;color:#374151;">
+              A specialist should reach out within 1 business day. If you would prefer, you can also book a time directly using the link below.
+            </p>
+
+            <div style="margin:24px 0 10px;">
+              <a href="${meetingLink}" style="display:inline-block;background:#163c35;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:600;">
+                Book a Call
+              </a>
+            </div>
+
+            <p style="margin:18px 0 0;font-size:13px;line-height:1.6;color:#6b7280;">
+              If you did not request this follow-up, you can ignore this email.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function sendCallbackConfirmationEmail(row) {
+  if (!resend) {
+    return {
+      sent: false,
+      skipped: true,
+      reason: "Resend is not configured.",
+    };
+  }
+
+  const subject = buildCallbackConfirmationSubject(row);
+  const html = buildCallbackConfirmationHtml(row);
+
+  const result = await resend.emails.send({
+    from: process.env.ALERT_FROM_EMAIL,
+    to: row.email,
+    reply_to: process.env.ALERT_FROM_EMAIL,
+    subject,
+    html,
+  });
+
+  return {
+    sent: true,
+    id: result?.data?.id || null,
+  };
+}
+
 async function syncHubSpotContact(row) {
   if (!HUBSPOT_SYNC_ENABLED || !process.env.HUBSPOT_PRIVATE_TOKEN) {
     return {
@@ -607,30 +710,86 @@ export default async function handler(req, res) {
     }
 
     let internalAlertResult = { sent: false, skipped: true, reason: "Conditions not met" };
+    let callbackConfirmationResult = { sent: false, skipped: true, reason: "Conditions not met" };
     let nurtureResult = { enrolled: false, skipped: true, reason: "Conditions not met" };
 
-    if (segment === "high_intent") {
-  // Meeting requested — send internal alert, skip nurture
+let callbackEmailResult = {
+  sent: false,
+  skipped: true,
+  reason: "Conditions not met",
+};
+
+if (segment === "high_intent") {
+  // Callback requested — send internal alert and immediate customer confirmation.
+  // Also clear any stale nurture state from pre-callback lifecycle.
+  const callbackStateUpdate = {
+    lead_segment: "high_intent",
+    nurture_status: "not_enrolled",
+    nurture_type: null,
+    nurture_step: 0,
+    nurture_next_send_at: null,
+  };
+
   if (!previousInternalAlertSent) {
     try {
       internalAlertResult = await sendInternalAlertEmail(saved);
-      await supabase
-        .from("risk_assessments")
-        .update({
-          lead_segment: "high_intent",
-          internal_alert_sent: true,
-          internal_alert_sent_at: new Date().toISOString(),
-        })
-        .eq("id", saved.id);
+      callbackStateUpdate.internal_alert_sent = true;
+      callbackStateUpdate.internal_alert_sent_at = new Date().toISOString();
     } catch (alertErr) {
       internalAlertResult = { sent: false, error: alertErr.message };
     }
   } else {
-    internalAlertResult = { sent: false, skipped: true, reason: "Alert already sent" };
+    internalAlertResult = {
+      sent: false,
+      skipped: true,
+      reason: "Alert already sent",
+    };
   }
-  nurtureResult = { enrolled: false, skipped: true, reason: "Callback requested — not enrolled in nurture" };
+
+  const shouldSendCallbackEmail =
+    saved.email &&
+    (
+      previousCallbackRequested !== true ||
+      previousStage !== "callback_requested"
+    );
+
+  if (shouldSendCallbackEmail) {
+    try {
+      callbackEmailResult = await sendCallbackConfirmationEmail(saved);
+      callbackStateUpdate.email_status = "sent";
+      callbackStateUpdate.email_error = null;
+    } catch (emailErr) {
+      callbackEmailResult = { sent: false, error: emailErr.message };
+      callbackStateUpdate.email_status = "failed";
+      callbackStateUpdate.email_error =
+        emailErr.message || "Callback confirmation email failed";
+    }
+  } else {
+    callbackEmailResult = {
+      sent: false,
+      skipped: true,
+      reason: "Callback confirmation already handled",
+    };
+  }
+
+  const { data: callbackUpdated, error: callbackUpdateError } = await supabase
+    .from("risk_assessments")
+    .update(callbackStateUpdate)
+    .eq("id", saved.id)
+    .select("*")
+    .single();
+
+  if (callbackUpdateError) throw callbackUpdateError;
+  saved = callbackUpdated;
+
+  nurtureResult = {
+    enrolled: false,
+    skipped: true,
+    reason: "Callback requested — not enrolled in nurture",
+  };
 
 } else if (segment === "high_no_callback") {
+
   // High risk, no meeting requested — urgent nurture sequence
   await supabase
     .from("risk_assessments")
@@ -713,18 +872,20 @@ export default async function handler(req, res) {
       }
     }
 
-    return res.status(200).json({
-      ok: true,
-      id: saved.id,
-      stage: saved.stage,
-      callback_requested: saved.callback_requested,
-      priority: saved.priority,
-      lead_temperature: saved.lead_temperature,
-      internal_alert: internalAlertResult,
-      nurture: nurtureResult,
-      hubspot: hubspotResult,
-      record: saved,
-    });
+return res.status(200).json({
+  ok: true,
+  id: saved.id,
+  stage: saved.stage,
+  callback_requested: saved.callback_requested,
+  priority: saved.priority,
+  lead_temperature: saved.lead_temperature,
+  internal_alert: internalAlertResult,
+  callback_email: callbackEmailResult,
+  nurture: nurtureResult,
+  hubspot: hubspotResult,
+  record: saved,
+});
+
   } catch (error) {
     console.error("lead upsert error:", error);
     return res.status(500).json({

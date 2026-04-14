@@ -682,6 +682,13 @@ const [form, setForm] = useState({
   const [doneSet, setDoneSet] = useState([]);
   const [result,  setResult]  = useState(null);
   const [barW,    setBarW]    = useState(0);
+  const [normalizedLocation, setNormalizedLocation] = useState({
+    location: "",
+    city: "",
+    state: "",
+    county: "",
+    zip: ""
+  }); 
 
   // lead / share
   const [lead,     setLead]     = useState({ name:"", phone:"", interest:"Full Professional Assessment" });
@@ -796,6 +803,14 @@ trackEvent("flood_assessment_submit_started", {
 const county = await lookupCounty(form.zip);
 if (county) location = `${zipCity}, ${county} County, ${zipState} ${form.zip}`;
 
+setNormalizedLocation({
+  location,
+  city: zipCity || form.city || "",
+  state: zipState || form.state || "",
+  county: county || "",
+  zip: form.zip || ""
+});
+
   const [aiRes] = await Promise.all([
     (async () => {
       try {
@@ -856,7 +871,7 @@ setResult({
 
 setLead({
   name: `${form.firstName} ${form.lastName}`.trim(),
-  phone: "",
+  phone: form.phone || "",
   interest: "Full Professional Assessment"
 });
 
@@ -965,24 +980,59 @@ trackEvent("flood_insurance_profile_captured", {
     setTimeout(() => setBarW(overallRiskScore), 150);
   }
 };
-  const handleLeadSubmit = async () => {
-  if (!lead.name || !lead.phone) return;
 
-  const parts = lead.name.trim().split(" ");
+const handleLeadSubmit = async () => {
+  const trimmedName = (lead.name || "").trim();
+  const trimmedPhone = (lead.phone || "").trim();
 
-    const leadId = getStoredLeadId();
+  if (!trimmedName || !trimmedPhone) return;
+
+  const parts = trimmedName.split(/\s+/);
+  const firstName = parts[0] || form.firstName || "";
+  const lastName = parts.slice(1).join(" ") || form.lastName || "";
+
+  const leadId = getStoredLeadId();
+
+  const resolvedCity =
+    normalizedLocation.city ||
+    form.city ||
+    result?.locationLabel ||
+    "";
+
+  const resolvedState =
+    normalizedLocation.state ||
+    form.state ||
+    "";
+
+  const resolvedZip =
+    normalizedLocation.zip ||
+    form.zip ||
+    "";
+
+  const resolvedLocation =
+    normalizedLocation.location ||
+    result?.location ||
+    [form.addressLine, resolvedCity, resolvedState, resolvedZip]
+      .filter(Boolean)
+      .join(", ");
+
+  // Persist phone into main form state too so it is not isolated only in lead state
+  setForm(f => ({
+    ...f,
+    phone: trimmedPhone
+  }));
 
   const payload = {
     id: leadId,
-    first_name: parts[0] || form.firstName,
-    last_name: parts.slice(1).join(" ") || form.lastName,
-    full_name: lead.name,
+    first_name: firstName,
+    last_name: lastName,
+    full_name: trimmedName,
     email: form.email,
-    phone: lead.phone,
+    phone: trimmedPhone,
     street_address: form.addressLine || "",
-    city: form.city || "",
-    state: form.state || "",
-    zip_code: form.zip || "",
+    city: resolvedCity,
+    state: resolvedState,
+    zip_code: resolvedZip,
     year_built: form.yearBuilt ? Number(form.yearBuilt) : null,
     property_type: form.propertyType || "",
     basement_type:
@@ -1002,16 +1052,22 @@ trackEvent("flood_insurance_profile_captured", {
     callback_requested: true,
     assessment_answers: {
       source: "lead_followup",
-      location: result?.location || "",
+      location: resolvedLocation,
+      city: resolvedCity,
+      state: resolvedState,
+      zip: resolvedZip,
       floodInsurance: form.floodInsurance,
       priorFloodClaim: form.priorFloodClaim,
       premiumIncrease: form.premiumIncrease,
       deniedOrDropped: form.deniedOrDropped,
-      leadRoute: result?.leadRoute || "standard_followup"
+      leadRoute: result?.leadRoute || "standard_followup",
+      previousScoreBreakdown: result?.breakdown || null
     }
   };
 
   try {
+    console.log("Submitting callback request payload:", payload);
+
     const response = await fetch(LEAD_UPSERT_API_URL, {
       method: "POST",
       headers: {
@@ -1022,6 +1078,8 @@ trackEvent("flood_insurance_profile_captured", {
 
     const submitResult = await response.json();
 
+    console.log("Callback request upsert response:", submitResult);
+
     if (!response.ok) {
       throw new Error(submitResult.error || "Lead submission failed");
     }
@@ -1030,13 +1088,15 @@ trackEvent("flood_insurance_profile_captured", {
       setStoredLeadId(submitResult.id);
     }
 
-setLeadDone(true);
-trackEvent("property_risk_lead_submitted", {
-  score: result?.score ?? null,
-  tier: result?.tier || "",
-  interest: lead.interest || "General Information",
-  zip: form.zip || ""
-});
+    setLeadDone(true);
+
+    trackEvent("property_risk_lead_submitted", {
+      score: result?.score ?? null,
+      tier: result?.tier || "",
+      interest: lead.interest || "General Information",
+      zip: resolvedZip || "",
+      callbackRequested: true
+    });
   } catch (err) {
     console.error("Lead submit failed:", err);
     alert(err.message || "Something went wrong.");
@@ -1100,6 +1160,13 @@ const text = `My home just scored ${score}/100 on the Property Risk Assessment â
     setLeadDone(false);
     setErrs({});
     setFormStep(0);
+    setNormalizedLocation({
+      location: "",
+      city: "",
+      state: "",
+      county: "",
+      zip: ""
+    });
   };
 
   const tc = result ? tierCls(result.score) : "";
