@@ -13,7 +13,7 @@ const resend = process.env.RESEND_API_KEY
 
 const PROCESS_SECRET = process.env.NURTURE_PROCESS_SECRET || "";
 const MEETING_LINK =
-  "https://meetings-na2.hubspot.com/nikolas-kron/assessment-meeting";
+  "https://oiriunu.com/assessment-reservation/";
 const APP_URL = (process.env.APP_URL || "https://flood-risk-tool-v4-dkrh.vercel.app").replace(/\/$/, "");
 
 function esc(value) {
@@ -127,7 +127,7 @@ function buildEmailContent(row) {
   const isMedium    = row.nurture_type === "medium";
 
   const solutionsLink  = "https://oiriunu.com/flood-prevention-solutions-texas/flood-protection-texas/#solutions";
-  const meetingLink    = "https://meetings-na2.hubspot.com/nikolas-kron/assessment-meeting";
+  const meetingLink    = "https://oiriunu.com/assessment-reservation/";
   const drainageLink   = "https://oiriunu.com/flood-prevention-solutions-texas/water-diversion-texas/";
   const entryPointLink = "https://oiriunu.com/flood-prevention-solutions-texas/entry-point-protection/";
   const waterRemovalLink = "https://oiriunu.com/flood-prevention-solutions-texas/water-removal/";
@@ -382,7 +382,7 @@ function buildUrgentEmailContent(row) {
   const scoreRaw  = Number(row.risk_score ?? 0);
   const score     = Number.isFinite(scoreRaw) ? Math.max(0, Math.min(100, Math.round(scoreRaw))) : 0;
   const location  = [row.city, row.state].filter(Boolean).join(", ");
-  const meetingLink = "https://meetings-na2.hubspot.com/nikolas-kron/assessment-meeting";
+  const meetingLink = "https://oiriunu.com/assessment-reservation/";
 
   // Step 0 — immediate: score callout, book a call
   if (row.nurture_step === 0) {

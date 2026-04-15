@@ -148,7 +148,7 @@ function buildInternalAlertHtml(row) {
     .join(", ") || "N/A";
   const scoreRaw = Number(row.risk_score ?? 0);
   const score = Number.isFinite(scoreRaw) ? Math.round(scoreRaw) : "N/A";
-  const meetingLink = "https://meetings-na2.hubspot.com/nikolas-kron/assessment-meeting";
+  const meetingLink = "https://oiriunu.com/assessment-reservation/";
 
   return `
     <div style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;">
@@ -304,7 +304,7 @@ function buildCallbackConfirmationHtml(row) {
       .join(", ") || "your property";
 
   const meetingLink =
-    "https://meetings-na2.hubspot.com/nikolas-kron/assessment-meeting";
+    "https://oiriunu.com/assessment-reservation/";
 
   return `
     <div style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;">
