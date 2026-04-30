@@ -645,6 +645,10 @@ function getOverallPropertyRiskScore(floodExposure, propertyVulnerability, insur
 export default function FloodRiskApp() {
   const seasonalAlert = getSeasonalAlert();
 
+  const params = new URLSearchParams(window.location.search);
+  const useCase = params.get("use_case");
+  const isBuyerMode = useCase === "homebuyer";
+
   // form state
 const [form, setForm] = useState({
   firstName: "",
@@ -665,7 +669,10 @@ const [form, setForm] = useState({
   floodInsurance: "",
   priorFloodClaim: "",
   premiumIncrease: "",
-  deniedOrDropped: ""
+  deniedOrDropped: "",
+  useCase: isBuyerMode ? "homebuyer" : "homeowner",
+  agentName: "",
+  buyerName: ""
 });
 
   const [addrMode,    setAddrMode]    = useState("full");
@@ -924,7 +931,10 @@ setLead({
       interest: form.interest || "",
       tier: aiRes?.tier || "",
       locationLabel: aiRes?.locationLabel || location,
-      reportSummary: aiRes?.financial?.narrative || ""
+      reportSummary: aiRes?.financial?.narrative || "",
+      use_case: form.useCase,
+      agent_name: form.agentName,
+      buyer_name: form.buyerName
     },
     utm_source: new URLSearchParams(window.location.search).get("utm_source"),
     utm_medium: new URLSearchParams(window.location.search).get("utm_medium"),
@@ -1278,6 +1288,28 @@ const text = `My home just scored ${score}/100 on the Property Risk Assessment �
       {errs.email && <div className="err">{errs.email}</div>}
     </div>
 
+    {isBuyerMode && (
+      <>
+        <div className="fld">
+          <label>Your Name (Buyer)</label>
+          <input
+            placeholder="Optional"
+            value={form.buyerName}
+            onChange={e => set("buyerName", e.target.value)}
+          />
+        </div>
+
+        <div className="fld">
+          <label>Realtor Name (Optional)</label>
+          <input
+            placeholder="e.g. John Smith"
+            value={form.agentName}
+            onChange={e => set("agentName", e.target.value)}
+          />
+        </div>
+      </>
+    )}
+
     <div style={{ display: "flex", gap: 10 }}>
       <button className="btn-go" style={{ flex: 1 }} onClick={nextStep}>
         Continue →
@@ -1454,8 +1486,17 @@ const text = `My home just scored ${score}/100 on the Property Risk Assessment �
               {/* Score hero */}
               <div className="sh">
                 <div className="sh-top">
-                  <div className="sh-greet">Hi {form.firstName}, here is your personalized property risk snapshot</div>
+                  <div className="sh-greet">
+                    {isBuyerMode
+                      ? `Property Risk Summary for ${form.buyerName || "Home Buyer"}`
+                      : `Hi ${form.firstName}, here is your personalized property risk snapshot`}
+                  </div>
                   <div className="sh-addr">📍 {result.location}</div>
+                  {isBuyerMode && form.agentName && (
+                    <div style={{ fontSize: 12, opacity: 0.7 }}>
+                      Prepared for {form.agentName}'s client
+                    </div>
+                  )}
                   <div className="sh-flex">
                     <div><div className="sh-num">{result.score}<span className="sh-den">/100</span></div></div>
                     <div className="sh-right">
@@ -1543,6 +1584,42 @@ const text = `My home just scored ${score}/100 on the Property Risk Assessment �
     </div>
   </div>
 </div>
+
+{isBuyerMode && (
+  <div className="sec">
+    <div className="sec-hd">
+      <span className="sec-ico">❓</span>
+      <span className="sec-title">What to Ask the Seller</span>
+    </div>
+    <div className="sec-body">
+      <div className="rlist">
+        <div className="ri"><div className="ric">•</div><div className="rt">Has the property ever experienced flooding or water intrusion?</div></div>
+        <div className="ri"><div className="ric">•</div><div className="rt">What drainage or flood mitigation work has been completed?</div></div>
+        <div className="ri"><div className="ric">•</div><div className="rt">Are there permits, invoices, or warranties for any work done?</div></div>
+        <div className="ri"><div className="ric">•</div><div className="rt">Is flood insurance currently required or in place?</div></div>
+        <div className="ri"><div className="ric">•</div><div className="rt">Have there been any insurance claims related to water damage?</div></div>
+      </div>
+    </div>
+  </div>
+)}
+
+{isBuyerMode && (
+  <div className="sec">
+    <div className="sec-hd">
+      <span className="sec-ico">💲</span>
+      <span className="sec-title">Estimated Mitigation Cost Range</span>
+    </div>
+    <div className="sec-body">
+      <div className="rlist">
+        <div className="rt">Basic drainage fixes: $500 – $3,000</div>
+        <div className="rt">Downspouts / grading: $250 – $2,500</div>
+        <div className="rt">French drains: $3,000 – $12,000+</div>
+        <div className="rt">Sump systems: $1,500 – $7,500+</div>
+        <div className="rt">Professional assessment: $300 – $1,500+</div>
+      </div>
+    </div>
+  </div>
+)}
 
 <div className="sec">
   <div className="sec-hd">
