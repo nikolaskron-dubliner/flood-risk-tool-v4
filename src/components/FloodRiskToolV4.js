@@ -648,6 +648,7 @@ export default function FloodRiskApp() {
   const params = new URLSearchParams(window.location.search);
   const useCase = params.get("use_case");
   const isBuyerMode = useCase === "homebuyer";
+  const agentNameFromUrl = params.get("agent_name") || "";
 
   // form state
 const [form, setForm] = useState({
@@ -671,7 +672,7 @@ const [form, setForm] = useState({
   premiumIncrease: "",
   deniedOrDropped: "",
   useCase: isBuyerMode ? "homebuyer" : "homeowner",
-  agentName: "",
+  agentName: agentNameFromUrl,
   buyerName: ""
 });
 
