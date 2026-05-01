@@ -136,6 +136,31 @@ async function sendToHubSpot(body) {
 
   return result.results?.[0] || result;
 }
+function getDistanceMiles(lat1, lon1, lat2, lon2) {
+  const R = 3958.8; // Earth radius in miles
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) ** 2;
+
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+async function geocodeAddress(streetAddress, zipCode) {
+  const address = encodeURIComponent(`${streetAddress}, ${zipCode}`);
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${address}&key=${process.env.GOOGLE_MAPS_API_KEY}`;
+  const res = await fetch(url);
+  const json = await res.json();
+  if (json.status !== "OK" || !json.results[0]) {
+    throw new Error(`Geocoding failed: ${json.status}`);
+  }
+  return json.results[0].geometry.location;
+}
+
 async function sendNotificationEmail(body) {
   const result = await resend.emails.send({
     from: process.env.RESEND_FROM_EMAIL,
@@ -209,6 +234,34 @@ export default async function handler(req, res) {
 
     if (error) {
       return res.status(500).json({ error: error.message });
+    }
+
+    try {
+      const geo = await geocodeAddress(body.streetAddress, body.zipCode);
+
+      const { data: zones } = await supabase
+        .from("geo_campaign_zones")
+        .select("*")
+        .eq("active", true);
+
+      const matchedZone = zones?.find(
+        (zone) =>
+          getDistanceMiles(geo.lat, geo.lng, zone.center_lat, zone.center_lng) <=
+          zone.radius_miles
+      );
+
+      await supabase
+        .from("risk_assessments")
+        .update({
+          geo_campaign_zone_id: matchedZone?.id || null,
+          campaign_zone: matchedZone?.zone_name || null,
+          parcel_risk_tier: null,
+          bayou_corridor: matchedZone?.bayou_corridor || null,
+          risk_driver_summary: matchedZone?.primary_risk_driver || null
+        })
+        .eq("id", data[0].id);
+    } catch (enrichErr) {
+      console.error("Geo enrichment failed:", enrichErr.message);
     }
 
     const hubspotResult = await sendToHubSpot(body);
