@@ -203,6 +203,18 @@ function buildInternalAlertHtml(row) {
                 <td>${escapeHtml(row.drainage_issues || "N/A")}</td>
               </tr>
               <tr>
+                <td style="padding:6px 0;font-weight:600;">Target Area:</td>
+                <td>${escapeHtml(row.target_area || "N/A")}</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 0;font-weight:600;">Recommended Package:</td>
+                <td>${escapeHtml(row.recommended_package || "N/A")}</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 0;font-weight:600;">Estimated Range:</td>
+                <td>${escapeHtml(row.estimated_project_range || "N/A")}</td>
+              </tr>
+              <tr>
                 <td style="padding:6px 0;font-weight:600;">Interest Area:</td>
                 <td>${escapeHtml(row.interest_area || "N/A")}</td>
               </tr>
@@ -585,6 +597,11 @@ export default async function handler(req, res) {
       utm_term: cleanText(body.utm_term),
       utm_content: cleanText(body.utm_content),
       referrer: cleanText(body.referrer),
+      source: cleanText(body.source),
+      target_area: cleanText(body.target_area),
+      local_risk_context: cleanText(body.local_risk_context),
+      recommended_package: cleanText(body.recommended_package),
+      estimated_project_range: cleanText(body.estimated_project_range),
       landing_page: cleanText(body.landing_page),
       raw_payload:
         body.raw_payload && typeof body.raw_payload === "object"

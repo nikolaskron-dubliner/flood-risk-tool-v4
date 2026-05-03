@@ -588,6 +588,61 @@ function clampScore(n) {
   return Math.max(0, Math.min(100, Math.round(n)));
 }
 
+function getUrlContext() {
+  const params = new URLSearchParams(window.location.search);
+
+  return {
+    source: params.get("source") || null,
+    target_area: params.get("area") || null,
+    utm_campaign: params.get("utm_campaign") || null,
+  };
+}
+
+function getLocalRiskContext(targetArea) {
+  if (targetArea === "brays_bayou_meyerland_core") {
+    return "Meyerland / Brays Bayou: combined surface drainage and bayou flood exposure";
+  }
+
+  return null;
+}
+
+function getMeyerlandPackage(form, score) {
+  const hasPriorFlooding = form.priorFloodDamage === "Yes";
+  const hasDrainageIssues =
+    form.drainageIssues === "Yes" || form.drainageIssues === "Sometimes";
+
+  const slabOrNoBasement =
+    !form.basement ||
+    form.basement === "No basement";
+
+  if (score >= 75 || (hasPriorFlooding && hasDrainageIssues)) {
+    return {
+      recommended_package:
+        "Drainage Stabilization + Entry Protection + Interior Flood Control",
+      estimated_project_range: "$12,000–$30,000+",
+    };
+  }
+
+  if (hasDrainageIssues && slabOrNoBasement) {
+    return {
+      recommended_package: "Drainage Stabilization + Entry Protection",
+      estimated_project_range: "$8,000–$20,000",
+    };
+  }
+
+  if (hasDrainageIssues) {
+    return {
+      recommended_package: "Property Drainage Stabilization",
+      estimated_project_range: "$5,000–$15,000",
+    };
+  }
+
+  return {
+    recommended_package: "Flood Risk Review + Entry Protection Screening",
+    estimated_project_range: "$1,500–$8,000",
+  };
+}
+
 function getPropertyVulnerabilityScore(form, floodExposureScore) {
   let score = 35;
 
@@ -862,6 +917,18 @@ console.log("RISK MODEL OUTPUT", {
 const insuranceSignals = getInsuranceLeadSignals(form, overallRiskScore);
 const leadRoute = getLeadRoute(form, overallRiskScore);
 
+const urlContext = getUrlContext();
+
+const localRecommendation =
+  urlContext.target_area === "brays_bayou_meyerland_core"
+    ? getMeyerlandPackage(form, overallRiskScore)
+    : {
+        recommended_package: null,
+        estimated_project_range: null,
+      };
+
+const localRiskContext = getLocalRiskContext(urlContext.target_area);
+
 setResult({
   ...aiRes,
   score: overallRiskScore,
@@ -913,6 +980,11 @@ setLead({
     stage: "completed",
     callback_requested: false,
     use_case: form.useCase || "homeowner",
+    source: urlContext.source,
+    target_area: urlContext.target_area,
+    local_risk_context: localRiskContext,
+    recommended_package: localRecommendation.recommended_package,
+    estimated_project_range: localRecommendation.estimated_project_range,
     agent_name: form.agentName || "",
     buyer_name: form.buyerName || "",
     agent_email: form.agentEmail || "",
@@ -943,6 +1015,11 @@ setLead({
       buyerName: form.buyerName || "",
       agentEmail: form.agentEmail || "",
       agentPhone: form.agentPhone || "",
+      source: urlContext.source,
+      targetArea: urlContext.target_area,
+      localRiskContext,
+      recommendedPackage: localRecommendation.recommended_package,
+      estimatedProjectRange: localRecommendation.estimated_project_range,
     },
     utm_source: new URLSearchParams(window.location.search).get("utm_source"),
     utm_medium: new URLSearchParams(window.location.search).get("utm_medium"),
@@ -1034,6 +1111,18 @@ const handleLeadSubmit = async () => {
       .filter(Boolean)
       .join(", ");
 
+  const urlContext = getUrlContext();
+
+  const localRecommendation =
+    urlContext.target_area === "brays_bayou_meyerland_core"
+      ? getMeyerlandPackage(form, result?.score || 0)
+      : {
+          recommended_package: null,
+          estimated_project_range: null,
+        };
+
+  const localRiskContext = getLocalRiskContext(urlContext.target_area);
+
   // Persist phone into main form state too so it is not isolated only in lead state
   setForm(f => ({
     ...f,
@@ -1068,6 +1157,11 @@ const handleLeadSubmit = async () => {
     risk_score: result?.score ?? null,
     stage: "callback_requested",
     callback_requested: true,
+    source: urlContext.source,
+    target_area: urlContext.target_area,
+    local_risk_context: localRiskContext,
+    recommended_package: localRecommendation.recommended_package,
+    estimated_project_range: localRecommendation.estimated_project_range,
     assessment_answers: {
       source: "lead_followup",
       location: resolvedLocation,
