@@ -1,20 +1,25 @@
-import { createClient } from "@supabase/supabase-js";
-import { Resend } from "resend";
+import supabase from "../_lib/supabase";
+import { createResendClient } from "../_lib/resend";
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  { auth: { persistSession: false } }
-);
-
-const resend = process.env.RESEND_API_KEY
-  ? new Resend(process.env.RESEND_API_KEY)
-  : null;
+const resend = createResendClient();
 
 const PROCESS_SECRET = process.env.NURTURE_PROCESS_SECRET || "";
 const MEETING_LINK =
   "https://oiriunu.com/assessment-reservation/";
 const APP_URL = (process.env.APP_URL || "https://flood-risk-tool-v4-dkrh.vercel.app").replace(/\/$/, "");
+
+function assertResendSent(result, fallbackMessage) {
+  if (result?.error) {
+    throw new Error(result.error.message || fallbackMessage);
+  }
+
+  const id = result?.data?.id || result?.id || null;
+  if (!id) {
+    throw new Error(fallbackMessage);
+  }
+
+  return id;
+}
 
 function esc(value) {
   return String(value ?? "")
@@ -491,25 +496,27 @@ function buildUrgentEmailContent(row) {
 async function sendStandardEmail(row) {
   if (!resend) throw new Error("Resend is not configured.");
   const content = buildEmailContent(row);
-  return resend.emails.send({
+  const result = await resend.emails.send({
     from: process.env.ALERT_FROM_EMAIL,
     to: row.email,
     reply_to: process.env.ALERT_FROM_EMAIL,
     subject: content.subject,
     html: content.html,
   });
+  return { id: assertResendSent(result, "Standard nurture email failed") };
 }
 
 async function sendUrgentEmail(row) {
   if (!resend) throw new Error("Resend is not configured.");
   const content = buildUrgentEmailContent(row);
-  return resend.emails.send({
+  const result = await resend.emails.send({
     from: process.env.ALERT_FROM_EMAIL,
     to: row.email,
     reply_to: process.env.ALERT_FROM_EMAIL,
     subject: content.subject,
     html: content.html,
   });
+  return { id: assertResendSent(result, "Urgent nurture email failed") };
 }
 
 // ─── Handler (cron entry point) ───────────────────────────────────────────────
@@ -532,6 +539,44 @@ export default async function handler(req, res) {
   }
 
   try {
+    const auditMode = req.query?.audit || body.audit || "";
+    if (auditMode === "stale") {
+      const staleMinutesRaw = req.query?.staleMinutes || body.staleMinutes || 60;
+      const staleMinutes = Math.max(5, Math.min(Number(staleMinutesRaw) || 60, 24 * 60));
+      const staleBefore = Date.now() - staleMinutes * 60 * 1000;
+
+      const { data: candidates, error: auditError } = await supabase
+        .from("risk_assessments")
+        .select("id,email,stage,callback_requested,nurture_status,nurture_type,nurture_step,nurture_next_send_at,nurture_last_sent_at,email_status,email_error,email_unsubscribed,created_at,updated_at")
+        .eq("stage", "completed")
+        .eq("callback_requested", false)
+        .order("updated_at", { ascending: true })
+        .limit(100);
+
+      if (auditError) throw auditError;
+
+      const stale = (candidates || []).filter((row) => {
+        if (row.email_unsubscribed === true) return false;
+        if (!row.nurture_status || row.nurture_status === "not_enrolled" || row.nurture_status === "failed") {
+          return true;
+        }
+
+        if (row.nurture_status === "queued" && row.nurture_next_send_at) {
+          return new Date(row.nurture_next_send_at).getTime() <= staleBefore;
+        }
+
+        return false;
+      });
+
+      return res.status(200).json({
+        ok: true,
+        audit: "stale",
+        staleMinutes,
+        count: stale.length,
+        rows: stale,
+      });
+    }
+
     const limitRaw = req.query?.limit || body.limit || 25;
     const limit = Math.min(Number(limitRaw) || 25, 100);
 
@@ -541,7 +586,7 @@ export default async function handler(req, res) {
       .in("nurture_status", ["queued", "active"])
       .lte("nurture_next_send_at", new Date().toISOString())
       .eq("callback_requested", false)
-      .neq("email_unsubscribed", true)
+      .or("email_unsubscribed.is.null,email_unsubscribed.eq.false")
       .order("nurture_next_send_at", { ascending: true })
       .limit(limit);
 
@@ -561,11 +606,10 @@ export default async function handler(req, res) {
           continue;
         }
 
-        if (row.nurture_type === "urgent" || row.nurture_type === "high_no_callback") {
-  await sendUrgentEmail(row);
-} else {
-  await sendStandardEmail(row);
-}
+        const sendResult =
+          row.nurture_type === "urgent" || row.nurture_type === "high_no_callback"
+            ? await sendUrgentEmail(row)
+            : await sendStandardEmail(row);
 
         const nextState = getNextSchedule(row.nurture_step);
 
@@ -585,6 +629,7 @@ export default async function handler(req, res) {
           id: row.id,
           email: row.email,
           ok: true,
+          email_id: sendResult.id,
           nurture_step_before: row.nurture_step,
           nurture_step_after: nextState.nurture_step,
           nurture_status_after: nextState.nurture_status,

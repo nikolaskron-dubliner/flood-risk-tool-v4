@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Flood Risk Tool V4 - Project Cleanup Map</title>
+  <style>
+    :root {
+      --ink: #173141;
+      --muted: #5c7281;
+      --line: #cfdde5;
+      --soft: #f3f8fa;
+      --blue: #0f6d9d;
+      --green: #117a62;
+      --gold: #a56b00;
+      --red: #9f2f2f;
+      --white: #ffffff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--soft);
+      color: var(--ink);
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.5;
+    }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 36px 20px 56px;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 32px;
+      line-height: 1.15;
+      margin-bottom: 10px;
+    }
+
+    .sub {
+      color: var(--muted);
+      max-width: 760px;
+      font-size: 16px;
+      margin-bottom: 28px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 8px 30px rgba(23, 49, 65, 0.07);
+    }
+
+    .wide {
+      grid-column: span 12;
+    }
+
+    .half {
+      grid-column: span 6;
+    }
+
+    .third {
+      grid-column: span 4;
+    }
+
+    .label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    .tree {
+      display: grid;
+      gap: 8px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 14px;
+      white-space: pre-wrap;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(130px, 1fr));
+      align-items: stretch;
+      gap: 12px;
+    }
+
+    .step {
+      border: 1px solid var(--line);
+      border-top: 5px solid var(--blue);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fbfdfe;
+      min-height: 130px;
+      position: relative;
+    }
+
+    .step:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      right: -16px;
+      top: 48%;
+      color: var(--muted);
+      font-weight: 700;
+      z-index: 2;
+    }
+
+    .step h3 {
+      font-size: 16px;
+      margin-bottom: 6px;
+    }
+
+    .step p,
+    li {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .green {
+      border-top-color: var(--green);
+    }
+
+    .gold {
+      border-top-color: var(--gold);
+    }
+
+    .red {
+      border-top-color: var(--red);
+    }
+
+    ul {
+      padding-left: 18px;
+      margin: 8px 0 0;
+    }
+
+    code {
+      background: #edf4f7;
+      border: 1px solid #d8e6ed;
+      border-radius: 5px;
+      padding: 2px 5px;
+      font-size: 13px;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .chip {
+      background: #edf4f7;
+      border: 1px solid #d8e6ed;
+      border-radius: 999px;
+      color: var(--ink);
+      font-size: 13px;
+      padding: 6px 10px;
+    }
+
+    @media (max-width: 900px) {
+      .half,
+      .third {
+        grid-column: span 12;
+      }
+
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      .step:not(:last-child)::after {
+        content: "↓";
+        right: 50%;
+        top: auto;
+        bottom: -18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Flood Risk Tool V4 Cleanup Map</h1>
+    <p class="sub">
+      A visual snapshot of what changed: the app still has the same homeowner assessment flow, but the project is now organized around clearer frontend modules, shared backend utilities, and documented legacy routes.
+    </p>
+
+    <section class="grid">
+      <article class="panel wide">
+        <div class="label">Product Flow</div>
+        <div class="flow">
+          <div class="step">
+            <h3>Assessment Form</h3>
+            <p>Visitor enters contact, property, condition, and insurance details.</p>
+          </div>
+          <div class="step green">
+            <h3>Report API</h3>
+            <p><code>/api/flood-risk-report</code> generates a structured risk report.</p>
+          </div>
+          <div class="step gold">
+            <h3>Risk Results</h3>
+            <p>Frontend shows score, breakdowns, financial impact, and recommendations.</p>
+          </div>
+          <div class="step red">
+            <h3>Lead Upsert</h3>
+            <p><code>/api/lead/upsert</code> saves, classifies, emails, and can sync HubSpot.</p>
+          </div>
+          <div class="step green">
+            <h3>Nurture</h3>
+            <p>Queued leads are processed through protected email follow-up.</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel half">
+        <div class="label">Frontend After Cleanup</div>
+        <div class="tree">src/
+  components/
+    FloodRiskToolV4.js
+    results/
+      CostCalculator.js
+    shared/
+      Toast.js
+  lib/
+    analytics.js
+    assessmentConstants.js
+    leadStorage.js
+    location.js
+    riskScoring.js
+  styles/
+    floodRiskTool.css</div>
+      </article>
+
+      <article class="panel half">
+        <div class="label">Backend After Cleanup</div>
+        <div class="tree">api/
+  _lib/
+    resend.js
+    supabase.js
+  flood-risk-report.js
+  lead/
+    upsert.js
+  nurture/
+    process.js
+  unsubscribe.js
+  legacy/
+    assessment-submit.js
+    hubspot-contact.js
+    lead-capture.js
+    lead-capture-enrich.js</div>
+      </article>
+
+      <article class="panel third">
+        <div class="label">What Moved</div>
+        <ul>
+          <li>Embedded component CSS moved to <code>src/styles</code>.</li>
+          <li>Pure scoring and routing helpers moved to <code>src/lib</code>.</li>
+          <li>Reusable UI pieces moved out of the main component.</li>
+          <li>Shared Supabase and Resend setup moved to <code>api/_lib</code>.</li>
+        </ul>
+      </article>
+
+      <article class="panel third">
+        <div class="label">What Stayed Primary</div>
+        <ul>
+          <li><code>FloodRiskToolV4.js</code> remains the main app screen.</li>
+          <li><code>/api/flood-risk-report</code> remains the report endpoint.</li>
+          <li><code>/api/lead/upsert</code> remains the lead workflow endpoint.</li>
+          <li><code>/api/nurture/process</code> remains the scheduled email processor.</li>
+        </ul>
+      </article>
+
+      <article class="panel third">
+        <div class="label">Health Check</div>
+        <ul>
+          <li><code>npm test -- --watchAll=false</code> passes.</li>
+          <li><code>npm run build</code> compiles successfully.</li>
+          <li>Mojibake encoding was repaired.</li>
+          <li>Backup exists outside the repo.</li>
+        </ul>
+      </article>
+
+      <article class="panel wide">
+        <div class="label">Documentation Added</div>
+        <p>
+          The stock Create React App README was replaced with project-specific setup, API, deployment, and maintenance notes.
+          A new <code>.env.example</code> documents the expected configuration without storing secrets.
+        </p>
+        <div class="chips">
+          <span class="chip">README.md</span>
+          <span class="chip">.env.example</span>
+          <span class="chip">api/legacy/README.md</span>
+          <span class="chip">docs/project-visual.html</span>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

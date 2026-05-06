@@ -1,15 +1,7 @@
-import { createClient } from "@supabase/supabase-js";
-import { Resend } from "resend";
+import supabase from "../_lib/supabase";
+import { createResendClient } from "../_lib/resend";
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  { auth: { persistSession: false } }
-);
-
-const resend = process.env.RESEND_API_KEY
-  ? new Resend(process.env.RESEND_API_KEY)
-  : null;
+const resend = createResendClient();
 
 const ALLOWED_STAGES = new Set([
   "partial",
@@ -24,6 +16,30 @@ const HUBSPOT_SYNC_ENABLED = process.env.HUBSPOT_SYNC_ENABLED === "true";
 const QUALIFIED_RISK_SCORE = Number(process.env.QUALIFIED_RISK_SCORE || 70);
 const HIGH_PRIORITY_SCORE = Number(process.env.HIGH_PRIORITY_SCORE || 90);
 const NUDGE_ENROLL_HOURS = Number(process.env.NUDGE_ENROLL_HOURS || 1);
+
+function assertResendSent(result, fallbackMessage) {
+  if (result?.error) {
+    throw new Error(result.error.message || fallbackMessage);
+  }
+
+  const id = result?.data?.id || result?.id || null;
+  if (!id) {
+    throw new Error(fallbackMessage);
+  }
+
+  return id;
+}
+
+function normalizeEmailRecipients(value) {
+  return Array.from(
+    new Set(
+      String(value || "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  );
+}
 
 function cleanText(value) {
   if (value === undefined || value === null) return null;
@@ -265,11 +281,12 @@ function escapeHtml(value) {
 
 async function sendInternalAlertEmail(row) {
   if (!resend) {
-    return {
-      sent: false,
-      skipped: true,
-      reason: "Resend is not configured.",
-    };
+    throw new Error("Resend is not configured.");
+  }
+
+  const recipients = normalizeEmailRecipients(process.env.ALERT_TO_EMAIL);
+  if (!recipients.length) {
+    throw new Error("ALERT_TO_EMAIL is not configured.");
   }
 
 let subject;
@@ -288,17 +305,45 @@ try {
 
 const result = await resend.emails.send({
   from: process.env.ALERT_FROM_EMAIL,
-  to: process.env.ALERT_TO_EMAIL,
+  to: recipients,
   subject,
   html,
 });
 
 console.log("RESEND RESPONSE:", result);
+const id = assertResendSent(result, "Internal alert email failed");
 
   return {
     sent: true,
-    id: result?.data?.id || null,
+    id,
   };
+}
+
+async function claimInternalAlert(rowId) {
+  const { data, error } = await supabase
+    .from("risk_assessments")
+    .update({ internal_alert_sent: true })
+    .eq("id", rowId)
+    .or("internal_alert_sent.is.null,internal_alert_sent.eq.false")
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Internal alert claim failed: ${error.message}`);
+  }
+
+  return Boolean(data?.id);
+}
+
+async function releaseInternalAlertClaim(rowId) {
+  const { error } = await supabase
+    .from("risk_assessments")
+    .update({ internal_alert_sent: false })
+    .eq("id", rowId);
+
+  if (error) {
+    console.error("Internal alert claim release failed:", error.message);
+  }
 }
 
 function buildCallbackConfirmationSubject(row) {
@@ -380,11 +425,7 @@ function buildCallbackConfirmationHtml(row) {
 
 async function sendCallbackConfirmationEmail(row) {
   if (!resend) {
-    return {
-      sent: false,
-      skipped: true,
-      reason: "Resend is not configured.",
-    };
+    throw new Error("Resend is not configured.");
   }
 
   const subject = buildCallbackConfirmationSubject(row);
@@ -397,10 +438,11 @@ async function sendCallbackConfirmationEmail(row) {
     subject,
     html,
   });
+  const id = assertResendSent(result, "Callback confirmation email failed");
 
   return {
     sent: true,
-    id: result?.data?.id || null,
+    id,
   };
 }
 
@@ -639,6 +681,7 @@ export default async function handler(req, res) {
     let previousStage = existing?.stage || null;
     let previousCallbackRequested = existing?.callback_requested === true;
     let previousInternalAlertSent = existing?.internal_alert_sent === true;
+    let previousEmailStatus = existing?.email_status || null;
 
     if (existing) {
       recordToWrite = mergeDefined(existing, incoming);
@@ -663,6 +706,7 @@ export default async function handler(req, res) {
         nurture_step: 0,
         nurture_next_send_at: null,
         nurture_last_sent_at: null,
+        email_unsubscribed: false,
         hubspot_sync_status: "pending",
         hubspot_sync_error: null,
         email_status: "pending",
@@ -741,6 +785,31 @@ let callbackEmailResult = {
   reason: "Conditions not met",
 };
 
+async function queueNurtureLead({ leadSegment, nurtureType }) {
+  const { data: queued, error: queueError } = await supabase
+    .from("risk_assessments")
+    .update({
+      lead_segment: leadSegment,
+      nurture_status: "queued",
+      nurture_type: nurtureType,
+      nurture_step: 0,
+      nurture_next_send_at: new Date().toISOString(),
+      email_status: "pending",
+      email_error: null,
+      email_unsubscribed: saved.email_unsubscribed === true ? true : false,
+    })
+    .eq("id", saved.id)
+    .select("*")
+    .single();
+
+  if (queueError) {
+    throw new Error(`Nurture enrollment failed: ${queueError.message}`);
+  }
+
+  saved = queued;
+  return { enrolled: true, type: nurtureType };
+}
+
 if (segment === "high_intent") {
   // Callback requested — send internal alert and immediate customer confirmation.
   // Also clear any stale nurture state from pre-callback lifecycle.
@@ -754,11 +823,23 @@ if (segment === "high_intent") {
 
   if (!previousInternalAlertSent) {
     try {
-      internalAlertResult = await sendInternalAlertEmail(saved);
-      callbackStateUpdate.internal_alert_sent = true;
-      callbackStateUpdate.internal_alert_sent_at = new Date().toISOString();
+      const claimedAlert = await claimInternalAlert(saved.id);
+      if (claimedAlert) {
+        internalAlertResult = await sendInternalAlertEmail(saved);
+        if (internalAlertResult.sent && internalAlertResult.id) {
+          callbackStateUpdate.internal_alert_sent = true;
+          callbackStateUpdate.internal_alert_sent_at = new Date().toISOString();
+        }
+      } else {
+        internalAlertResult = {
+          sent: false,
+          skipped: true,
+          reason: "Internal alert already claimed or sent",
+        };
+      }
     } catch (alertErr) {
       internalAlertResult = { sent: false, error: alertErr.message };
+      await releaseInternalAlertClaim(saved.id);
     }
   } else {
     internalAlertResult = {
@@ -772,14 +853,21 @@ if (segment === "high_intent") {
     saved.email &&
     (
       previousCallbackRequested !== true ||
-      previousStage !== "callback_requested"
+      previousStage !== "callback_requested" ||
+      previousEmailStatus === "failed"
     );
 
   if (shouldSendCallbackEmail) {
     try {
       callbackEmailResult = await sendCallbackConfirmationEmail(saved);
-      callbackStateUpdate.email_status = "sent";
-      callbackStateUpdate.email_error = null;
+      if (callbackEmailResult.sent && callbackEmailResult.id) {
+        callbackStateUpdate.email_status = "sent";
+        callbackStateUpdate.email_error = null;
+      } else {
+        callbackStateUpdate.email_status = "failed";
+        callbackStateUpdate.email_error =
+          callbackEmailResult.reason || "Callback confirmation email was not sent";
+      }
     } catch (emailErr) {
       callbackEmailResult = { sent: false, error: emailErr.message };
       callbackStateUpdate.email_status = "failed";
@@ -812,46 +900,25 @@ if (segment === "high_intent") {
 
 } else if (segment === "high_no_callback") {
 
-  // High risk, no meeting requested — urgent nurture sequence
-  await supabase
-    .from("risk_assessments")
-    .update({
-      lead_segment: "high_no_callback",
-      nurture_status: "queued",
-      nurture_type: "high_no_callback",
-      nurture_step: 0,
-      nurture_next_send_at: new Date().toISOString(),
-    })
-    .eq("id", saved.id);
-  nurtureResult = { enrolled: true, type: "high_no_callback" };
+  // High risk, no meeting requested - urgent nurture sequence
+  nurtureResult = await queueNurtureLead({
+    leadSegment: "high_no_callback",
+    nurtureType: "high_no_callback",
+  });
 
 } else if (segment === "medium") {
-  // Medium risk — standard nurture sequence
-  await supabase
-    .from("risk_assessments")
-    .update({
-      lead_segment: "medium",
-      nurture_status: "queued",
-      nurture_type: "medium",
-      nurture_step: 0,
-      nurture_next_send_at: new Date().toISOString(),
-    })
-    .eq("id", saved.id);
-  nurtureResult = { enrolled: true, type: "medium" };
+  // Medium risk - standard nurture sequence
+  nurtureResult = await queueNurtureLead({
+    leadSegment: "medium",
+    nurtureType: "medium",
+  });
 
 } else {
-  // Low risk — low nurture sequence
-  await supabase
-    .from("risk_assessments")
-    .update({
-      lead_segment: "low",
-      nurture_status: "queued",
-      nurture_type: "low",
-      nurture_step: 0,
-      nurture_next_send_at: new Date().toISOString(),
-    })
-    .eq("id", saved.id);
-  nurtureResult = { enrolled: true, type: "low" };
+  // Low risk - low nurture sequence
+  nurtureResult = await queueNurtureLead({
+    leadSegment: "low",
+    nurtureType: "low",
+  });
 }
 
     let hubspotResult = {
@@ -916,3 +983,4 @@ return res.status(200).json({
     });
   }
 }
+

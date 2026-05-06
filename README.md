@@ -1,70 +1,113 @@
-# Getting Started with Create React App
+# Flood Risk Tool V4
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Flood Risk Tool V4 is a React and Vercel application for generating a homeowner flood-risk assessment, capturing qualified leads, and running follow-up email workflows for Oiriunu.
 
-## Available Scripts
+## What It Does
 
-In the project directory, you can run:
+The app guides a visitor through a multi-step property assessment, generates a flood-risk report, and presents:
 
-### `npm start`
+- An overall property risk score
+- Flood exposure, property vulnerability, and insurance risk breakdowns
+- Financial exposure estimates
+- DIY flood-protection recommendations
+- Professional service recommendations
+- Buyer-oriented seller questions and mitigation ranges when relevant
+- A follow-up lead capture form for personalized guidance
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+The backend stores leads in Supabase, can sync qualified records to HubSpot, sends internal and customer emails with Resend, and processes nurture campaigns through a protected cron-style endpoint.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## Tech Stack
 
-### `npm test`
+- React 19
+- Create React App / `react-scripts`
+- Vercel serverless functions
+- Supabase
+- Resend
+- HubSpot CRM API
+- Google Maps Geocoding API
+- Gemini API for report generation
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## Project Structure
 
-### `npm run build`
+```text
+api/
+  _lib/                  Shared serverless helpers
+  lead/upsert.js          Main lead upsert, routing, alerts, and HubSpot sync
+  nurture/process.js      Protected nurture email processor
+  flood-risk-report.js    Gemini-backed flood report generator
+  unsubscribe.js          Email unsubscribe endpoint
+  legacy/                 Older lead/contact endpoints kept for reference
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+src/
+  components/
+    FloodRiskToolV4.js    Main assessment experience
+  lib/                    Frontend helpers for risk, leads, and location logic
+  styles/                 App-specific styles
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+public/                   Static CRA assets
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## Local Setup
 
-### `npm run eject`
+Install dependencies:
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+```bash
+npm install
+```
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+Create a local env file:
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+```bash
+cp .env.example .env.local
+```
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+Then fill in the server-side secrets in Vercel and local development as needed.
 
-## Learn More
+Start the development server:
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+```bash
+npm start
+```
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+Run tests:
 
-### Code Splitting
+```bash
+npm test
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+Build for production:
 
-### Analyzing the Bundle Size
+```bash
+npm run build
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+## Environment Variables
 
-### Making a Progressive Web App
+See [.env.example](.env.example) for the full list.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+Client-side variables must start with `REACT_APP_`. All service keys, tokens, and API secrets must remain server-side only.
 
-### Advanced Configuration
+## Primary API Routes
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+- `POST /api/flood-risk-report` generates a structured flood-risk report.
+- `POST /api/lead/upsert` creates or updates an assessment lead, classifies it, sends alerts or confirmations, enrolls nurture flows, and optionally syncs HubSpot.
+- `GET|POST /api/nurture/process` processes due nurture emails. Requires `NURTURE_PROCESS_SECRET`.
+- `GET|POST /api/unsubscribe` unsubscribes a lead from nurture emails.
 
-### Deployment
+## Legacy Routes
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+Older lead and contact routes have been moved into `api/legacy`. Keep them only while confirming that no external site, landing page, or automation still calls them.
 
-### `npm run build` fails to minify
+## Deployment Notes
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+The app is designed for Vercel. Configure all server-side environment variables in the Vercel project settings. If using the nurture processor, configure a Vercel Cron Job or external scheduler that calls:
+
+```text
+/api/nurture/process?secret=<NURTURE_PROCESS_SECRET>
+```
+
+## Maintenance Notes
+
+- Keep scoring and lead-routing logic in `src/lib` or `api/_lib`, not inside UI markup.
+- Keep email templates and HubSpot/Supabase integration code out of route handlers where possible.
+- Do not commit `.vercel`, `.env.local`, production secrets, or generated build output.
