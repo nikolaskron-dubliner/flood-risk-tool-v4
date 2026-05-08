@@ -351,6 +351,137 @@ function buildCallbackConfirmationSubject(row) {
   return `We received your request, ${firstName} — next steps from Oiriunu`;
 }
 
+function buildReportEmailSubject(row) {
+  const scoreRaw = Number(row.risk_score ?? 0);
+  const score = Number.isFinite(scoreRaw) ? Math.round(scoreRaw) : null;
+  return score !== null
+    ? `Your Oiriunu flood risk report: ${score}/100`
+    : "Your Oiriunu flood risk report";
+}
+
+function getReportRecommendations(row) {
+  const answers = row.assessment_answers || {};
+  const recommendations = [];
+
+  if (row.recommended_package) {
+    recommendations.push(`Recommended package: ${row.recommended_package}`);
+  }
+
+  if (answers.reportSummary) {
+    recommendations.push(answers.reportSummary);
+  }
+
+  if (row.drainage_issues === "Yes" || row.drainage_issues === "Sometimes") {
+    recommendations.push("Address drainage and pooling issues so water is directed away from the property.");
+  }
+
+  if (row.trees_overhang === "Yes") {
+    recommendations.push("Clear overhanging tree debris from rooflines and gutters to reduce preventable water intrusion.");
+  }
+
+  if (row.prior_flood_damage === "Yes") {
+    recommendations.push("Review prior water-damage areas first because repeat-event risk is higher at known weak points.");
+  }
+
+  if (answers.floodInsurance === "No" || answers.floodInsurance === "Not sure") {
+    recommendations.push("Review flood insurance options and coverage gaps before the next major storm season.");
+  }
+
+  recommendations.push("Schedule a specialist review to prioritize the most cost-effective mitigation steps.");
+
+  return Array.from(new Set(recommendations.filter(Boolean))).slice(0, 5);
+}
+
+function buildReportEmailHtml(row) {
+  const firstName = row.first_name || "there";
+  const scoreRaw = Number(row.risk_score ?? 0);
+  const score = Number.isFinite(scoreRaw) ? Math.round(scoreRaw) : null;
+  const answers = row.assessment_answers || {};
+  const address =
+    [row.street_address, row.city, row.state, row.zip_code]
+      .filter(Boolean)
+      .join(", ") ||
+    answers.location ||
+    "your property";
+  const meetingLink = "https://oiriunu.com/assessment-reservation/";
+  const recommendations = getReportRecommendations(row);
+  const localContext = row.local_risk_context || answers.localRiskContext;
+
+  return `
+    <div style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;">
+      <div style="max-width:680px;margin:0 auto;padding:24px 16px;">
+        <div style="background:#ffffff;border-radius:14px;border:1px solid #e5e7eb;overflow:hidden;">
+          <div style="background:#163c35;color:#ffffff;padding:22px 24px;">
+            <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.9;">Oiriunu Flood Risk Intelligence</div>
+            <div style="font-size:24px;font-weight:700;margin-top:8px;">Your flood risk report summary</div>
+          </div>
+
+          <div style="padding:28px 24px;">
+            <p style="margin:0 0 16px;font-size:16px;line-height:1.7;color:#374151;">
+              Hi ${escapeHtml(firstName)},
+            </p>
+            <p style="margin:0 0 18px;font-size:16px;line-height:1.7;color:#374151;">
+              Here is a copy of your flood risk assessment summary for ${escapeHtml(address)}.
+            </p>
+
+            <div style="background:#f0f7f5;border:1px solid #cfe6dd;border-radius:10px;padding:16px;margin:18px 0;">
+              <div style="font-size:13px;color:#163c35;font-weight:700;margin-bottom:8px;">Report snapshot</div>
+              <div style="font-size:14px;color:#374151;line-height:1.7;">
+                ${score !== null ? `<div><strong>Risk score:</strong> ${escapeHtml(String(score))}/100</div>` : ""}
+                <div><strong>Risk tier:</strong> ${escapeHtml(answers.tier || "See report")}</div>
+                <div><strong>Property:</strong> ${escapeHtml(address)}</div>
+                ${row.estimated_project_range ? `<div><strong>Estimated project range:</strong> ${escapeHtml(row.estimated_project_range)}</div>` : ""}
+                ${localContext ? `<div><strong>Local context:</strong> ${escapeHtml(localContext)}</div>` : ""}
+              </div>
+            </div>
+
+            <div style="margin:20px 0;">
+              <div style="font-size:15px;color:#163c35;font-weight:700;margin-bottom:10px;">Key recommendations</div>
+              <ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:1.7;">
+                ${recommendations.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+              </ul>
+            </div>
+
+            <p style="margin:20px 0 16px;font-size:16px;line-height:1.7;color:#374151;">
+              If you want help interpreting the report or prioritizing flood protection improvements, schedule a specialist review below.
+            </p>
+
+            <div style="margin:24px 0 10px;">
+              <a href="${meetingLink}" style="display:inline-block;background:#163c35;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:600;">
+                Schedule Follow-up
+              </a>
+            </div>
+
+            <p style="margin:18px 0 0;font-size:13px;line-height:1.6;color:#6b7280;">
+              This email is a summary of the report shown after your assessment. If you need a complete copy, use the print/save option on the report screen.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function sendReportSummaryEmail(row) {
+  if (!resend) {
+    throw new Error("Resend is not configured.");
+  }
+
+  const result = await resend.emails.send({
+    from: process.env.ALERT_FROM_EMAIL,
+    to: row.email,
+    reply_to: process.env.ALERT_FROM_EMAIL,
+    subject: buildReportEmailSubject(row),
+    html: buildReportEmailHtml(row),
+  });
+  const id = assertResendSent(result, "Report summary email failed");
+
+  return {
+    sent: true,
+    id,
+  };
+}
+
 function buildCallbackConfirmationHtml(row) {
   const firstName = row.first_name || "there";
   const scoreRaw = Number(row.risk_score ?? 0);
@@ -784,6 +915,11 @@ let callbackEmailResult = {
   skipped: true,
   reason: "Conditions not met",
 };
+let reportEmailResult = {
+  sent: false,
+  skipped: true,
+  reason: "Conditions not met",
+};
 
 async function queueNurtureLead({ leadSegment, nurtureType }) {
   const { data: queued, error: queueError } = await supabase
@@ -808,6 +944,28 @@ async function queueNurtureLead({ leadSegment, nurtureType }) {
 
   saved = queued;
   return { enrolled: true, type: nurtureType };
+}
+
+const shouldSendReportEmail =
+  saved.email &&
+  saved.stage === "completed" &&
+  previousStage !== "completed";
+
+if (shouldSendReportEmail) {
+  try {
+    reportEmailResult = await sendReportSummaryEmail(saved);
+  } catch (emailErr) {
+    reportEmailResult = {
+      sent: false,
+      error: emailErr.message || "Report summary email failed",
+    };
+  }
+} else {
+  reportEmailResult = {
+    sent: false,
+    skipped: true,
+    reason: "Report summary already handled or not applicable",
+  };
 }
 
 if (segment === "high_intent") {
@@ -970,6 +1128,7 @@ return res.status(200).json({
   lead_temperature: saved.lead_temperature,
   internal_alert: internalAlertResult,
   callback_email: callbackEmailResult,
+  report_email: reportEmailResult,
   nurture: nurtureResult,
   hubspot: hubspotResult,
   record: saved,

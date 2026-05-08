@@ -11,6 +11,41 @@ import Toast from "./shared/Toast";
 const FLOOD_REPORT_API_URL = "/api/flood-risk-report";
 const LEAD_UPSERT_API_URL = "/api/lead/upsert";
 
+async function readJsonResponse(response, fallbackMessage) {
+  let data = null;
+  const contentType = response.headers?.get?.("content-type") || "";
+
+  if (typeof response.text === "function") {
+    const text = await response.text();
+
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch (err) {
+        const looksLikeHtml = contentType.includes("text/html") || text.trim().startsWith("<");
+        if (looksLikeHtml) {
+          throw new Error(
+            `${fallbackMessage}. The API returned HTML instead of JSON. Make sure /api/lead/upsert is being served by the Vercel API route, not only the React dev server.`
+          );
+        }
+        throw new Error(`${fallbackMessage}. The API returned an invalid JSON response.`);
+      }
+    }
+  } else {
+    try {
+      data = await response.json();
+    } catch (err) {
+      throw new Error(`${fallbackMessage}. The API returned an invalid JSON response.`);
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.error || data?.message || fallbackMessage);
+  }
+
+  return data || {};
+}
+
 export default function FloodRiskApp() {
   const seasonalAlert = getSeasonalAlert();
 
@@ -51,7 +86,7 @@ const [form, setForm] = useState({
   const [errs,        setErrs]        = useState({});
 
   // multi-step progress
-  const [formStep, setFormStep] = useState(0); // 0,1,2
+  const [formStep, setFormStep] = useState(0);
 
   // app phase
   const [phase,   setPhase]   = useState("form");
@@ -75,13 +110,13 @@ const [form, setForm] = useState({
   const [assessmentSaveError, setAssessmentSaveError] = useState("");
   const [pendingAssessmentPayload, setPendingAssessmentPayload] = useState(null);
   const [assessmentSaveRetrying, setAssessmentSaveRetrying] = useState(false);
+  const [reportEmailStatus, setReportEmailStatus] = useState("");
 
   const set = (k,v) => setForm(f => ({ ...f, [k]: v }));
 
   // progress %
-  const fields0 = [form.firstName, form.lastName, form.email].filter(Boolean).length;
-  const fields1 = [form.zip, form.yearBuilt, form.propertyType, form.basement].filter(Boolean).length;
-  const fields2 = [
+  const propertyFields = [form.zip, form.yearBuilt, form.propertyType, form.basement].filter(Boolean).length;
+  const conditionFields = [
   form.treesOverhang,
   form.priorFloodDamage,
   form.drainageIssues,
@@ -90,9 +125,10 @@ const [form, setForm] = useState({
   form.premiumIncrease,
   form.deniedOrDropped
 ].filter(Boolean).length;
+  const contactFields = [form.firstName, form.lastName, form.email].filter(Boolean).length;
 
 const totalFields = 3 + 4 + 7;
-const totalFilled = fields0 + fields1 + fields2;
+const totalFilled = propertyFields + conditionFields + contactFields;
   const progressPct = Math.round((totalFilled / totalFields) * 100);
 
   // Validate current step
@@ -100,14 +136,6 @@ const totalFilled = fields0 + fields1 + fields2;
   const e = {};
 
   if (step === 0) {
-    if (!form.firstName.trim()) e.firstName = "Required";
-    if (!form.lastName.trim()) e.lastName = "Required";
-    if (!form.email.trim() || !/\S+@\S+\.\S+/.test(form.email)) {
-      e.email = "Valid email required";
-    }
-  }
-
-  if (step === 1) {
     if (addrMode === "full") {
       if (!form.addressLine.trim()) e.addressLine = "Required";
       if (!form.zip.trim()) e.zip = "Required";
@@ -120,11 +148,19 @@ const totalFilled = fields0 + fields1 + fields2;
     if (!form.yearBuilt.trim()) e.yearBuilt = "Required";
   }
 
-  if (step === 2) {
+  if (step === 1) {
     if (!form.treesOverhang) e.treesOverhang = "Required";
     if (!form.priorFloodDamage) e.priorFloodDamage = "Required";
     if (!form.drainageIssues) e.drainageIssues = "Required";
     if (!form.floodInsurance) e.floodInsurance = "Required";
+  }
+
+  if (step === 2) {
+    if (!form.firstName.trim()) e.firstName = "Required";
+    if (!form.lastName.trim()) e.lastName = "Required";
+    if (!form.email.trim() || !/\S+@\S+\.\S+/.test(form.email)) {
+      e.email = "Valid email required";
+    }
   }
 
   setErrs(e);
@@ -137,7 +173,7 @@ const totalFilled = fields0 + fields1 + fields2;
       step: formStep + 1,
       stepName: FORM_STEPS[formStep]
     });
-    setFormStep(s => Math.min(2, s + 1));
+    setFormStep(s => Math.min(FORM_STEPS.length - 1, s + 1));
   } else {
     trackEvent("flood_assessment_step_validation_failed", {
       step: formStep + 1,
@@ -148,7 +184,12 @@ const totalFilled = fields0 + fields1 + fields2;
   const prevStep = () => setFormStep(s => Math.max(0, s-1));
 
   const handleSubmit = async () => {
-  if (!validateStep(2)) return;
+  for (let step = 0; step < FORM_STEPS.length; step += 1) {
+    if (!validateStep(step)) {
+      setFormStep(step);
+      return;
+    }
+  }
 
 trackEvent("flood_assessment_submit_started", {
   addrMode,
@@ -357,11 +398,7 @@ setLead({
       body: JSON.stringify(payload)
     });
 
-    const submitResult = await response.json();
-
-    if (!response.ok) {
-      throw new Error(submitResult.error || "Submission failed");
-    }
+    const submitResult = await readJsonResponse(response, "Submission failed");
 
     if (submitResult?.id) {
       setStoredLeadId(submitResult.id);
@@ -369,6 +406,13 @@ setLead({
 
     setAssessmentSaveError("");
     setPendingAssessmentPayload(null);
+    if (submitResult?.report_email?.sent) {
+      setReportEmailStatus(`A report summary has been emailed to ${form.email}.`);
+    } else if (submitResult?.report_email?.error) {
+      setReportEmailStatus("We could not email your report summary. Print or save this report now.");
+    } else {
+      setReportEmailStatus("Print or save this report now so you can reference it later.");
+    }
 
     console.log("Lead upsert success:", submitResult);
     trackEvent("property_risk_result_viewed", {
@@ -397,6 +441,7 @@ trackEvent("flood_insurance_profile_captured", {
       err.message ||
       "Your report was generated, but we could not save your assessment for follow-up. Please retry so we can email your results."
     );
+    setReportEmailStatus("We could not email your report summary. Print or save this report now.");
     setPhase("result");
     setTimeout(() => setBarW(overallRiskScore), 150);
   }
@@ -415,11 +460,7 @@ const retryAssessmentSave = async () => {
       body: JSON.stringify(pendingAssessmentPayload)
     });
 
-    const submitResult = await response.json();
-
-    if (!response.ok) {
-      throw new Error(submitResult.error || "Submission failed");
-    }
+    const submitResult = await readJsonResponse(response, "Submission failed");
 
     if (submitResult?.id) {
       setStoredLeadId(submitResult.id);
@@ -427,6 +468,11 @@ const retryAssessmentSave = async () => {
 
     setAssessmentSaveError("");
     setPendingAssessmentPayload(null);
+    if (submitResult?.report_email?.sent) {
+      setReportEmailStatus(`A report summary has been emailed to ${form.email}.`);
+    } else if (submitResult?.report_email?.error) {
+      setReportEmailStatus("We still could not email your report summary. Print or save this report now.");
+    }
   } catch (err) {
     console.error("Assessment save retry failed:", err);
     console.error("Recoverable assessment lead payload:", pendingAssessmentPayload);
@@ -437,6 +483,15 @@ const retryAssessmentSave = async () => {
   } finally {
     setAssessmentSaveRetrying(false);
   }
+};
+
+const handlePrintReport = () => {
+  trackEvent("flood_report_print_clicked", {
+    score: result?.score ?? null,
+    tier: result?.tier || "",
+    zip: form.zip || ""
+  });
+  window.print();
 };
 
 const handleLeadSubmit = async () => {
@@ -560,13 +615,9 @@ const handleLeadSubmit = async () => {
       body: JSON.stringify(payload)
     });
 
-    const submitResult = await response.json();
+    const submitResult = await readJsonResponse(response, "Lead submission failed");
 
     console.log("Callback request upsert response:", submitResult);
-
-    if (!response.ok) {
-      throw new Error(submitResult.error || "Lead submission failed");
-    }
 
     if (submitResult?.id) {
       setStoredLeadId(submitResult.id);
@@ -644,6 +695,10 @@ const text = `My home just scored ${score}/100 on the Property Risk Assessment �
     setLeadDone(false);
     setErrs({});
     setFormStep(0);
+    setAssessmentSaveError("");
+    setPendingAssessmentPayload(null);
+    setAssessmentSaveRetrying(false);
+    setReportEmailStatus("");
     setNormalizedLocation({
       location: "",
       city: "",
@@ -716,13 +771,13 @@ const text = `My home just scored ${score}/100 on the Property Risk Assessment �
           {phase === "form" && (
             <div className="card">
               <div className="card-hd">
-                <span>{["👤","🏠","🌿"][formStep]}</span>
+                <span>{["🏠","🌿","👤"][formStep]}</span>
                 <span className="card-hd-title">{FORM_STEPS[formStep]}</span>
               </div>
               <div className="card-body">
 
-{/* STEP 0 — Identity */}
-{formStep === 0 && (
+{/* STEP 2 — Identity */}
+{formStep === 2 && (
   <div className="fg">
     <div className="frow">
       <div className="fld">
@@ -783,14 +838,17 @@ const text = `My home just scored ${score}/100 on the Property Risk Assessment �
     )}
 
     <div style={{ display: "flex", gap: 10 }}>
-      <button className="btn-go" style={{ flex: 1 }} onClick={nextStep}>
-        Continue →
+      <button className="btn-go" style={{ background:"var(--cloud)", color:"var(--sub)", border:"1.5px solid var(--border)", boxShadow:"none", flex:"0 0 auto", width:"auto", padding:"12px 20px" }} onClick={prevStep}>
+        ← Back
+      </button>
+      <button className="btn-go" style={{ flex: 1 }} onClick={handleSubmit}>
+        Generate My Free Flood Risk Report →
       </button>
     </div>
   </div>
 )}
-                {/* STEP 1 — Property */}
-                {formStep === 1 && (
+                {/* STEP 0 — Property */}
+                {formStep === 0 && (
                   <div className="fg">
                     {addrMode === "full" ? (
                       <>
@@ -852,14 +910,13 @@ const text = `My home just scored ${score}/100 on the Property Risk Assessment �
                       </select>
                     </div>
                     <div style={{display:"flex",gap:10}}>
-                      <button className="btn-go" style={{background:"var(--cloud)",color:"var(--sub)",border:"1.5px solid var(--border)",boxShadow:"none",flex:"0 0 auto",width:"auto",padding:"12px 20px"}} onClick={prevStep}>← Back</button>
                       <button className="btn-go" style={{flex:1}} onClick={nextStep}>Continue →</button>
                     </div>
                   </div>
                 )}
 
-                {/* STEP 2 — Condition */}
-                {formStep === 2 && (
+                {/* STEP 1 — Condition */}
+                {formStep === 1 && (
                   <div className="fg">
                     <div style={{background:"var(--skylt)",borderRadius:8,padding:"12px 15px",fontSize:13,color:"var(--blue)",marginBottom:4,fontWeight:500}}>
                       💡 These details significantly personalise your report. Take 30 seconds — it's worth it.
@@ -922,7 +979,7 @@ const text = `My home just scored ${score}/100 on the Property Risk Assessment �
 </div>
                     <div style={{display:"flex",gap:10}}>
                       <button className="btn-go" style={{background:"var(--cloud)",color:"var(--sub)",border:"1.5px solid var(--border)",boxShadow:"none",flex:"0 0 auto",width:"auto",padding:"12px 20px"}} onClick={prevStep}>← Back</button>
-                      <button className="btn-go" style={{flex:1}} onClick={handleSubmit}>Generate My Free Flood Risk Report →</button>
+                      <button className="btn-go" style={{flex:1}} onClick={nextStep}>Continue →</button>
                     </div>
                   </div>
                 )}
@@ -956,7 +1013,7 @@ const text = `My home just scored ${score}/100 on the Property Risk Assessment �
           {phase === "result" && result && (
             <div className={`results ${tc}`}>
               {assessmentSaveError && (
-                <div style={{
+                <div className="no-print" style={{
                   background: "#fff3cd",
                   border: "1px solid #ffe08a",
                   borderRadius: 8,
@@ -985,6 +1042,18 @@ const text = `My home just scored ${score}/100 on the Property Risk Assessment �
                   </button>
                 </div>
               )}
+
+              <div className="report-save-notice no-print">
+                <div>
+                  <strong>Save this report now.</strong>
+                  <span>
+                    This opens your browser print dialog. Choose your printer or select Save as PDF. {reportEmailStatus || "We will email a summary when your assessment is saved."}
+                  </span>
+                </div>
+                <button type="button" className="print-report-btn" onClick={handlePrintReport}>
+                  Open Print / Save PDF
+                </button>
+              </div>
 
               {/* Score hero */}
               <div className="sh">

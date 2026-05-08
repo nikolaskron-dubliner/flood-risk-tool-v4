@@ -63,17 +63,6 @@ function mockFetch({ initialLeadOk = true, retryLeadOk = true } = {}) {
 async function completeAssessment() {
   render(<App />);
 
-  fireEvent.change(screen.getByPlaceholderText("Jane"), {
-    target: { value: "Jane" },
-  });
-  fireEvent.change(screen.getByPlaceholderText("Smith"), {
-    target: { value: "Tester" },
-  });
-  fireEvent.change(screen.getByPlaceholderText("jane@example.com"), {
-    target: { value: "jane.tester@example.com" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: /Continue/i }));
-
   fireEvent.change(screen.getByPlaceholderText("123 Main Street"), {
     target: { value: "123 Test Street" },
   });
@@ -99,6 +88,17 @@ async function completeAssessment() {
   fireEvent.click(document.querySelector('input[name="priorFloodDamage"][value="No"]'));
   fireEvent.click(document.querySelector('input[name="drainageIssues"][value="No"]'));
   fireEvent.click(document.querySelector('input[name="floodInsurance"][value="No"]'));
+  fireEvent.click(screen.getByRole("button", { name: /Continue/i }));
+
+  fireEvent.change(screen.getByPlaceholderText("Jane"), {
+    target: { value: "Jane" },
+  });
+  fireEvent.change(screen.getByPlaceholderText("Smith"), {
+    target: { value: "Tester" },
+  });
+  fireEvent.change(screen.getByPlaceholderText("jane@example.com"), {
+    target: { value: "jane.tester@example.com" },
+  });
   fireEvent.click(screen.getByRole("button", { name: /Generate My Free Flood Risk Report/i }));
 
   await screen.findByText(/personalized property risk snapshot/i);

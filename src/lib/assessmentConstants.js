@@ -52,7 +52,7 @@ export const LOAD_STEPS = [
 ];
 
 
-export const FORM_STEPS = ["Your Details","Property Info","Property Condition"];
+export const FORM_STEPS = ["Property Info","Property Condition","Your Details"];
 
 
 export const tierCls   = s => s < 25 ? "tl" : s < 50 ? "tm" : s < 75 ? "th" : "ts";
