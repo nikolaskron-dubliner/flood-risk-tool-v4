@@ -159,6 +159,7 @@ function buildEmailContent(row) {
                 <p style="margin:0 0 10px;">Oiriunu helps homeowners identify practical ways to reduce property risk through both DIY solutions and professional support.</p>
                 <p style="margin:0 0 10px;">Oiriunu may earn commission through affiliate marketing links for DIY purchases and may also earn commission on referral services.</p>
                 <p style="margin:0 0 10px;">If you have questions, simply reply to this email.</p>
+                <p style="margin:0 0 10px;">Protect your home before the next storm hits — explore the <a href="https://oiriunu.com/store/" style="color:#163c35;font-weight:700;">Oiriunu Store</a> (https://oiriunu.com/store/) for practical, expert-picked flood mitigation and home protection products designed to reduce water damage and everyday property risks.</p>
                 <p style="margin:0;padding-top:10px;border-top:1px solid #e5e7eb;">
                   <a href="${unsubUrl}" style="color:#9ca3af;font-size:12px;text-decoration:underline;">Unsubscribe from these emails</a>
                 </p>
@@ -428,6 +429,7 @@ function buildUrgentEmailContent(row) {
                   <p style="margin:0 0 10px;">Oiriunu helps homeowners identify practical ways to reduce property risk through both DIY solutions and professional support.</p>
                   <p style="margin:0 0 10px;">Oiriunu may earn commission through affiliate marketing links for DIY purchases and may also earn commission on referral services.</p>
                   <p style="margin:0 0 10px;">Reply to this email with any questions — we read every response.</p>
+                  <p style="margin:0 0 10px;">Protect your home before the next storm hits — explore the <a href="https://oiriunu.com/store/" style="color:#7f1d1d;font-weight:700;">Oiriunu Store</a> (https://oiriunu.com/store/) for practical, expert-picked flood mitigation and home protection products designed to reduce water damage and everyday property risks.</p>
                   <p style="margin:0;padding-top:10px;border-top:1px solid #e5e7eb;">
                     <a href="${unsubUrl0}" style="color:#9ca3af;font-size:12px;text-decoration:underline;">Unsubscribe from these emails</a>
                   </p>
@@ -480,6 +482,7 @@ function buildUrgentEmailContent(row) {
                 <p style="margin:0 0 10px;">Oiriunu helps homeowners identify practical ways to reduce property risk through both DIY solutions and professional support.</p>
                 <p style="margin:0 0 10px;">Oiriunu may earn commission through affiliate marketing links for DIY purchases and may also earn commission on referral services.</p>
                 <p style="margin:0 0 10px;">If you have questions, simply reply to this email.</p>
+                <p style="margin:0 0 10px;">Protect your home before the next storm hits — explore the <a href="https://oiriunu.com/store/" style="color:#7f1d1d;font-weight:700;">Oiriunu Store</a> (https://oiriunu.com/store/) for practical, expert-picked flood mitigation and home protection products designed to reduce water damage and everyday property risks.</p>
                 <p style="margin:0;padding-top:10px;border-top:1px solid #e5e7eb;">
                   <a href="${unsubUrl1}" style="color:#9ca3af;font-size:12px;text-decoration:underline;">Unsubscribe from these emails</a>
                 </p>
